@@ -1,0 +1,149 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Plus } from 'lucide-react'
+import { listCompanies } from '@/api/platform.api'
+import { useServerList } from '@/hooks/useServerList'
+import { usePaths } from '@/hooks/usePaths'
+import { useAuth } from '@/context/authContext'
+import { Page, PageHeader, Section } from '@/components/common/Page'
+import { DataTable, type ColumnDef } from '@/components/common/DataTable'
+import { ActiveBadge } from '@/components/common/Badges'
+import { CompanyAvatar } from '@/components/common/CompanyAvatar'
+import { Button } from '@/components/ui/button'
+import { CompanyOnboardingDialog } from '@/components/common/onboarding/CompanyOnboardingDialog'
+import type { Company } from '@/types/admin'
+
+function formatDate(iso: string | null): string {
+  if (!iso) return '—'
+  const date = new Date(iso)
+  return Number.isNaN(date.getTime())
+    ? '—'
+    : date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+export default function CompaniesPage() {
+  const { can } = useAuth()
+  const paths = usePaths()
+  const navigate = useNavigate()
+  const [onboarding, setOnboarding] = useState(false)
+
+  const companies = useServerList(listCompanies, { page: 1, pageSize: 15, sort: 'name', dir: 'asc' })
+
+  const openCompany = (company: Company) => {
+    const path = paths.company(company.id)
+    if (path) navigate(path)
+  }
+
+  const columns: ColumnDef<Company>[] = [
+    {
+      key: 'name',
+      header: 'Company',
+      serverSort: 'name',
+      render: (company) => (
+        <div className="flex items-center gap-2.5">
+          <CompanyAvatar name={company.name} size="md" />
+          <div className="min-w-0">
+            <p className="truncate font-medium text-foreground">{company.name}</p>
+            <p className="truncate text-xs text-muted-foreground">{company.slug}</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      width: 'w-32',
+      serverSort: 'status',
+      render: (company) => <ActiveBadge active={company.active} />,
+    },
+    {
+      key: 'users',
+      header: 'People',
+      align: 'right',
+      width: 'w-24',
+      secondary: true,
+      serverSort: 'users',
+      render: (company) => (
+        <span className="tabular-nums">{(company.userCount ?? 0).toLocaleString()}</span>
+      ),
+    },
+    {
+      key: 'dashboards',
+      header: 'Dashboards',
+      align: 'right',
+      width: 'w-28',
+      secondary: true,
+      serverSort: 'dashboards',
+      render: (company) => (
+        <span className="tabular-nums">{(company.dashboardCount ?? 0).toLocaleString()}</span>
+      ),
+    },
+    {
+      key: 'created',
+      header: 'Onboarded',
+      width: 'w-36',
+      secondary: true,
+      serverSort: 'created',
+      render: (company) => (
+        <span className="text-muted-foreground">{formatDate(company.createdAt)}</span>
+      ),
+    },
+  ]
+
+  const canCreate = can('company.create')
+
+  return (
+    <Page>
+      <PageHeader
+        title="Companies"
+        description="Every customer on the platform."
+        actions={
+          canCreate && (
+            <Button onClick={() => setOnboarding(true)}>
+              <Plus aria-hidden />
+              Onboard a company
+            </Button>
+          )
+        }
+      />
+
+      <Section flush>
+        <DataTable
+          data={companies.error ? null : (companies.data?.items ?? null)}
+          columns={columns}
+          keyOf={(company) => company.id}
+          loading={companies.loading}
+          error={companies.error}
+          onRetry={companies.reload}
+          onRowClick={openCompany}
+          searchPlaceholder="Search companies…"
+          server={{
+            total: companies.data?.total ?? 0,
+            query: companies.query,
+            onQueryChange: companies.setQuery,
+            narrowed: companies.narrowed,
+          }}
+          empty={{
+            title: 'No customers yet',
+            body: canCreate
+              ? 'Onboard your first customer company. You create it and its administrator together, and they are invited by email.'
+              : 'No companies have been onboarded yet.',
+            action: canCreate ? (
+              <Button onClick={() => setOnboarding(true)}>
+                <Plus aria-hidden />
+                Onboard a company
+              </Button>
+            ) : undefined,
+          }}
+        />
+      </Section>
+
+      <CompanyOnboardingDialog
+        open={onboarding}
+        onOpenChange={setOnboarding}
+        onCreated={companies.reload}
+      />
+    </Page>
+  )
+}
+
