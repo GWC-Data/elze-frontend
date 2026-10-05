@@ -1,0 +1,38 @@
+#!/bin/sh
+# Sourced (the .envsh suffix) by the nginx image's /docker-entrypoint.sh
+# before 20-envsubst-on-templates.sh renders nginx.conf, so the values
+# exported here are the ones the template receives.
+#
+# BACKEND_URL / ADK_API_URL are the base URLs of the two separately deployed
+# backends. Checked up front so a missing or malformed value stops the
+# container with a readable message, instead of an nginx config error (unset)
+# or a broken route on every request (no scheme, or a path that would replace
+# the request URI - see nginx.conf).
+
+elze_check_upstream() {
+  local name="$1" value rest
+  eval "value=\${$name:-}"
+  value="${value%/}"   # tolerate a single trailing slash
+
+  case "$value" in
+    http://*|https://*) ;;
+    "")
+      echo "elze: $name is not set - give the base URL of that service, e.g. https://my-service.example.com" >&2
+      exit 1 ;;
+    *)
+      echo "elze: $name must start with http:// or https:// (got \"$value\")" >&2
+      exit 1 ;;
+  esac
+
+  rest="${value#*://}"
+  case "$rest" in
+    ""|*/*)
+      echo "elze: $name must be scheme://host[:port], with no path (got \"$value\")" >&2
+      exit 1 ;;
+  esac
+
+  export "$name=$value"
+}
+
+elze_check_upstream BACKEND_URL
+elze_check_upstream ADK_API_URL
