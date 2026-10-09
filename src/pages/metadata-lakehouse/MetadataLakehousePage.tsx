@@ -5,6 +5,7 @@ import {
   Database,
   Plus,
   RefreshCw,
+  Share2,
   Table2,
   Trash2,
 } from 'lucide-react'
@@ -21,6 +22,8 @@ import { ContextQueryProvider } from '@/context/QueryProvider'
 import { useConnections, useDeleteConnection, useVerifyConnection } from '@/hooks/useMetadataLakehouse'
 import { VersionBadge } from '@/components/common/metadata-lakehouse/VersionBadge'
 import { McpDetailsDialog } from '@/components/common/metadata-lakehouse/McpDetailsDialog'
+import { ContextShareDialog } from '@/components/common/metadata-lakehouse/ContextShareDialog'
+import { accessAtLeast, CONTEXT_ACCESS_LABELS } from '@/lib/contextAccess'
 import { PublishedContextsSection, PublishedSearch } from '@/components/common/metadata-lakehouse/PublishedContextsSection'
 import { connectorPresentation } from '@/lib/connectors'
 import { formatRelativeTime, maskSecretHint } from '@/lib/format'
@@ -38,11 +41,7 @@ function ConnectionsLanding() {
   const { can } = useAuth()
   const paths = usePaths()
   const navigate = useNavigate()
-  // context.manage was split: starting a connection, working on a draft and deleting are
-  // separate permissions (backend constants/permissions.ts).
   const canCreate = can('context.create')
-  const canManage = can('context.update')
-  const canDelete = can('context.delete')
 
   const connections = useConnections()
   const verify = useVerifyConnection()
@@ -50,6 +49,7 @@ function ConnectionsLanding() {
 
   const [deleting, setDeleting] = useState<Connection | null>(null)
   const [mcpFor, setMcpFor] = useState<Connection | null>(null)
+  const [shareFor, setShareFor] = useState<Connection | null>(null)
   const [publishedSearch, setPublishedSearch] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
 
@@ -133,13 +133,12 @@ function ConnectionsLanding() {
                   <ConnectionCard
                     key={connection.id}
                     connection={connection}
-                    canManage={canManage}
-                    canDelete={canDelete}
                     busy={busyId === connection.id}
                     builderPath={paths.metadataLakehouseBuilder(connection.id)}
                     datasetsPath={paths.metadataLakehouseConnection(connection.id)}
                     onVerify={() => void runVerify(connection)}
                     onDelete={() => setDeleting(connection)}
+                    onShare={() => setShareFor(connection)}
                   />
                 ))}
               </div>
@@ -148,16 +147,16 @@ function ConnectionsLanding() {
 
           <Section
             title="Published"
-            description="Every published context and its full version history. Open a card or a version to see it as published; the menu has its MCP details and Create new version."
+            description="Every published context you can open, and its full version history. Open a card or a version to see it as published; the menu has its MCP details, sharing and Create new version."
             actions={<PublishedSearch value={publishedSearch} onChange={setPublishedSearch} />}
           >
             <PublishedContextsSection
               connections={list}
-              canManage={canManage}
               builderPath={(id) => paths.metadataLakehouseBuilder(id)}
               datasetsPath={(id) => paths.metadataLakehouseConnection(id)}
               publishedPath={(id, versionId) => paths.metadataLakehouseBuilder(id, versionId)}
               onMcp={setMcpFor}
+              onShare={setShareFor}
               search={publishedSearch}
             />
           </Section>
@@ -165,6 +164,13 @@ function ConnectionsLanding() {
       )}
 
       <McpDetailsDialog connection={mcpFor} onOpenChange={(open) => !open && setMcpFor(null)} />
+
+      <ContextShareDialog
+        connectionId={shareFor?.id ?? null}
+        name={shareFor?.name ?? ''}
+        open={shareFor !== null}
+        onOpenChange={(open) => !open && setShareFor(null)}
+      />
 
       <ConfirmDialog
         open={deleting !== null}
@@ -183,23 +189,24 @@ function ConnectionsLanding() {
 
 function ConnectionCard({
   connection,
-  canManage,
-  canDelete,
   busy,
   builderPath,
   datasetsPath,
   onVerify,
   onDelete,
+  onShare,
 }: {
   connection: Connection
-  canManage: boolean
-  canDelete: boolean
   busy: boolean
   builderPath: string
   datasetsPath: string
   onVerify: () => void
   onDelete: () => void
+  onShare: () => void
 }) {
+  const access = connection.access
+  const canManage = accessAtLeast(access, 'edit')
+  const canDelete = accessAtLeast(access, 'full')
   const presentation = connectorPresentation(connection.provider)
   const connected = connection.status === 'connected'
   const datasetCount = connection.selectedDatasetCount ?? 0
@@ -234,10 +241,16 @@ function ConnectionCard({
             >
               {connected ? 'Connected' : 'Not working'}
             </Badge>
+            {access && !access.isOwner && access.level !== 'full' ? (
+              <Badge variant="outline" className="text-muted-foreground">
+                {CONTEXT_ACCESS_LABELS[access.level]}
+              </Badge>
+            ) : null}
           </div>
 
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {connection.host} · {maskSecretHint(connection.secretHint)}
+            {access?.owner && !access.isOwner ? ` · owner ${access.owner.name ?? 'unknown'}` : ''}
           </p>
 
           {connection.context ? (
@@ -299,6 +312,12 @@ function ConnectionCard({
               {busy ? 'Checking…' : 'Verify'}
             </Button>
           </>
+        ) : null}
+        {access?.canShare ? (
+          <Button size="sm" variant="outline" onClick={onShare}>
+            <Share2 className="size-4" aria-hidden />
+            Share
+          </Button>
         ) : null}
         {canDelete ? (
           <Button

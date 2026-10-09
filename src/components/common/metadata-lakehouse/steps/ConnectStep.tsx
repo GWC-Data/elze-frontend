@@ -1,6 +1,4 @@
 import { useState } from 'react'
-import { notify } from '@/lib/notify'
-import { createAdkSession } from '@/api/adk.api'
 import { StepFrame } from '@/components/common/metadata-lakehouse/StepFrame'
 import { QueryBoundary, TableSkeleton } from '@/components/common/metadata-lakehouse/DataStates'
 import { endpoints } from '@/api/endpoints'
@@ -118,13 +116,6 @@ function ConnectForm({
             onConnected={(created) => {
               setChosen(null)
               setConnectionId(created.connection.id)
-
-              createAdkSession(created.connection.id, 'context_layer_extractor').catch(
-                (err) => {
-                  notify.failure('start the context extraction agent for this connection', err)
-                }
-              )
-
               goToStep('context')
             }}
           />

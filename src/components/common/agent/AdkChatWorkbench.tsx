@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/workbench/button"
 import { Input } from "@/components/ui/workbench/input"
 import { Skeleton } from "@/components/ui/workbench/skeleton"
 import { MarkdownText } from "@/components/common/agent/tools/MarkdownText"
+import { ChatBalloon } from "@/components/common/agent/ChatBalloon"
 import { ErrorState, InlineLoading } from "@/components/common/States"
 import type {
   AdkArtifact,
@@ -41,7 +42,6 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-// Session ids are internal and never shown in the UI.
 function formatUsage(usage: AdkSessionUsage): string {
   const entries = Object.entries(usage).filter(([key]) => !/session/i.test(key))
   if (entries.length === 0) return "No usage reported for this session yet."
@@ -66,18 +66,10 @@ export interface AdkChatWorkbenchProps {
   sessions: AdkSessionSummary[] | null
   reloadSessions: () => void
   onDeleteSession?: (sessionId: string) => Promise<void>
-  // Rendered beside the attach button (e.g. the Data analyst's context picker).
   composerAccessory?: React.ReactNode
-  // Sent once, automatically, the first time this mounts with no existing
-  // session — the "open a chat with a request already typed" flow (e.g.
-  // promoting a draft playbook).
   initialAutoSend?: string
 }
 
-// Shared chat loop for the two ADK-backed workbench pages (Data Analyst,
-// Playbook Builder) — same session-history sidebar + turn list + pending
-// spinner (no live streaming, per UnderstandChatWidget's proven pattern) +
-// interrupt + usage + optional inline attach.
 export function AdkChatWorkbench({
   sessionId,
   basePath,
@@ -109,11 +101,6 @@ export function AdkChatWorkbench({
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const endRef = React.useRef<HTMLDivElement>(null)
 
-  // Server history for the open chat, plus what this view has sent since. `local`
-  // is keyed by conversation so switching chats never shows another chat's turns,
-  // and the "new chat" → "just-created session" transition carries turns over
-  // instead of losing them (the key changes to the real session id at that point,
-  // via the same setLocal call that already holds the right turns).
   const viewKey = sessionId ?? "new"
   const history = useAsync(() => (sessionId ? loadSession(sessionId) : Promise.resolve(null)), [sessionId])
   const historyTurns = React.useMemo<Turn[]>(() => {
@@ -225,11 +212,7 @@ export function AdkChatWorkbench({
 
   const handleStop = async () => {
     if (!sessionId) return
-    try {
-      await interrupt(sessionId)
-    } catch {
-      // The in-flight send() still resolves either way.
-    }
+    await interrupt(sessionId).catch(() => undefined)
   }
 
   const handleFile = async (file: File | null) => {
@@ -395,6 +378,7 @@ export function AdkChatWorkbench({
             <ErrorState error={historyError} title="Couldn't load this conversation" />
           ) : showEmptyState ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+              <ChatBalloon />
               <div className="flex flex-col gap-1 text-muted-foreground">
                 <span className="text-base font-semibold text-card-foreground">{emptyTitle}</span>
                 <span>{emptyBody}</span>

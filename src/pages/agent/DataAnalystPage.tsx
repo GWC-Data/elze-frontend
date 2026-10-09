@@ -8,7 +8,7 @@ import { AdkChatWorkbench } from "@/components/common/agent/AdkChatWorkbench"
 import { ContextPicker, type PublishedContextOption } from "@/components/common/agent/ContextPicker"
 import { useAuth } from "@/context/authContext"
 import {
-  createAdkSession,
+  createDataAnalystSession,
   deleteAdkSession,
   getAdkSession,
   getAdkSessionUsage,
@@ -35,11 +35,8 @@ export default function DataAnalystPage() {
 function DataAnalystChat({ connectionId, sessionId }: { connectionId: string; sessionId?: string }) {
   const paths = usePaths()
   const sessionsQuery = useAsync(() => listAdkSessions(connectionId, AGENT), [connectionId])
-  // The published context version to answer from. None by default. It is fixed when a chat
-  // starts (sent as the session's initial state), so it can only be changed on a new chat.
   const [context, setContext] = React.useState<PublishedContextOption | null>(null)
   const canPickContext = useAuth().can("context.read")
-  // An existing chat shows the context it was started with, read from its session state.
   const [opened, setOpened] = React.useState<{ sessionId: string; context: PublishedContextOption | null } | null>(null)
   const sessionContext = sessionId && opened?.sessionId === sessionId ? opened.context : null
 
@@ -62,17 +59,19 @@ function DataAnalystChat({ connectionId, sessionId }: { connectionId: string; se
         })
       }
       createSession={() =>
-        createAdkSession(
+        createDataAnalystSession(
           connectionId,
-          AGENT,
           context
             ? {
-                context_version_id: context.id,
-                context_connection_id: context.connectionId,
-                context_name: context.name,
-                context_version: context.version,
+                contextIds: [context.connectionId],
+                initialState: {
+                  context_version_id: context.id,
+                  context_connection_id: context.connectionId,
+                  context_name: context.name,
+                  context_version: context.version,
+                },
               }
-            : undefined
+            : {}
         )
       }
       sendMessage={(sid, text, artifactIds) => sendAdkMessage(connectionId, AGENT, sid, { text, artifactIds })}
@@ -98,7 +97,6 @@ function DataAnalystChat({ connectionId, sessionId }: { connectionId: string; se
   )
 }
 
-// The picker's option, rebuilt from what createSession stored; null when the chat had none.
 function contextFromState(state: Record<string, unknown>): PublishedContextOption | null {
   const id = state.context_version_id
   if (typeof id !== "string" || !id) return null

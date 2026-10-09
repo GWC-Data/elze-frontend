@@ -21,8 +21,6 @@ export default function NotFoundPage() {
   const location = useLocation()
   const navigate = useNavigate()
 
-  // React Router stores the history index in `window.history.state.idx`; 0 means this is the
-  // first entry of the tab (e.g. a pasted link), where "back" would leave the app entirely.
   const canGoBack = ((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0
 
   const destinations: Destination[] = [

@@ -89,8 +89,6 @@ function TextAreaField({
   )
 }
 
-// One page for creating (`/agents/new`) and editing (`/agents/:agentId/edit`) a library
-// agent. Its chat lives at `/agents/:agentId`; creating an agent opens it there.
 export default function LibraryAgentPage() {
   const { agentId } = useParams()
   const paths = usePaths()
@@ -101,7 +99,6 @@ export default function LibraryAgentPage() {
   const loaded = useAsync(() => (agentId ? agentLibraryApi.get(agentId) : Promise.resolve(null)), [agentId])
   const { can, user } = useAuth()
 
-  // The latest copy a save returned, so a save does not flash the page back to loading.
   const [latest, setLatest] = useState<LibraryAgent | null>(null)
   const agent = latest && latest.id === agentId ? latest : loaded.data
 
@@ -139,7 +136,6 @@ export default function LibraryAgentPage() {
     )
   }
 
-  // The route needs agent.update; this is the per-agent half (yours, or agent.manage_all).
   const allowed = agent ? agentAccess(agent, user?.id, can) : null
   if (agent && allowed && !allowed.edit) {
     return (

@@ -1,47 +1,50 @@
 import * as React from 'react'
-import { ArrowUp, BarChart3, Loader2, Paperclip, Sparkles, Square, X } from 'lucide-react'
+import {
+  ArrowUp,
+  AtSign,
+  BarChart3,
+  Columns3,
+  Loader2,
+  Paperclip,
+  Sparkles,
+  Square,
+  Table2,
+  X,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { notify } from '@/lib/notify'
+import { errorMessage } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { MarkdownText } from '@/components/common/agent/tools/MarkdownText'
+import { Hint } from '@/components/common/Hint'
+import { ChatBalloon } from '@/components/common/agent/ChatBalloon'
 import {
-  createAdkSession,
-  getAdkSession,
+  createDescriptionEditorSession,
   getAdkSessionUsage,
   interruptAdkSession,
-  sendAdkMessage,
+  sendDescriptionEditorMessage,
   uploadAdkArtifact,
 } from '@/api/adk.api'
-import type { AdkArtifact, AdkChatTurn, AdkSessionUsage } from '@/types/adk'
+import { useFactsByTable } from '@/hooks/useMetadataLakehouse'
+import { columnMention, tableMention } from '@/components/common/metadata-lakehouse/steps/mentions'
+import type { DatasetNames, MentionRow } from '@/components/common/metadata-lakehouse/steps/mentions'
+import type { AdkArtifact, AdkSessionUsage } from '@/types/adk'
 
-const AGENT = 'context_layer_extractor' as const
+const AGENT = 'description_editor' as const
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+const MAX_OPTIONS = 40
 
 const SUGGESTIONS = [
-  'What tables did you find?',
-  'Summarize what needs review.',
-  'What relationships exist between these tables?',
+  'Rewrite the description in plain business language.',
+  'Make the description shorter and clearer.',
+  'Explain what it means for a business user, with an example.',
 ]
 
 type Turn =
-  | { id: string; role: 'user'; text: string }
+  | { id: string; role: 'user'; text: string; rows: MentionRow[]; files: string[] }
   | { id: string; role: 'agent'; text: string; toolCalls: string[]; interrupted: boolean }
   | { id: string; role: 'error'; text: string }
-
-// The extraction session's history as chat turns, minus the extraction itself: its first user
-// turn is the extraction request (built server-side from the dataset ids) and everything up to
-// the next user turn is the agent's run and report - already shown on the page. What follows is
-// earlier chat in this same session.
-function chatTurnsAfterExtraction(turns: AdkChatTurn[]): Turn[] {
-  const userAt = turns.map((t, i) => (t.role === 'user' ? i : -1)).filter((i) => i >= 0)
-  if (userAt.length < 2) return []
-  return turns.slice(userAt[1]).map((t) =>
-    t.role === 'user'
-      ? { id: crypto.randomUUID(), role: 'user' as const, text: t.text }
-      : { id: crypto.randomUUID(), role: 'agent' as const, text: t.text, toolCalls: [], interrupted: false }
-  )
-}
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -49,119 +52,116 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-// Session ids are internal and never shown in the UI.
 function formatUsage(usage: AdkSessionUsage): string {
   const entries = Object.entries(usage).filter(([key]) => !/session/i.test(key))
   if (entries.length === 0) return 'No usage reported for this session yet.'
   return entries.map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`).join(' · ')
 }
 
-// A docked side panel, not a floating popup — mirrors a browser side-panel assistant
-// (open next to the page, full height, header + messages + input). Talks to the
-// context_layer_extractor ADK agent (adk.api.ts) — the same one that ran the
-// extraction this step shows — the same way extraction.api.ts does: workspace
-// id = this connection's id. Open/close is controlled by the parent so the
-// toggle button can live in the step header instead of floating on the page.
-//
-// It continues the EXTRACTION's own session (`extractionSessionId`, recorded on the draft
-// when the analysis ran), so the agent answers with that run's conversation in context and
-// a reload picks the chat up where it was. Only a context never analysed starts a new one.
-// The parent remounts it (key) when a re-run records a new session.
+function mentionTokenAt(value: string, caret: number): { start: number; query: string } | null {
+  const match = /(^|\s)@([^\s@]*)$/.exec(value.slice(0, caret))
+  return match ? { start: caret - match[2].length - 1, query: match[2] } : null
+}
+
 export function UnderstandChatWidget({
   connectionId,
-  extractionSessionId,
-  open,
-  onOpenChange,
-  focusTable,
+  versionId,
+  mentions,
+  onAddMention,
+  onRemoveMention,
+  datasetNames,
+  onEdited,
+  className,
 }: {
   connectionId: string
-  extractionSessionId?: string | null
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  // Set by a "Ask about this data" button on one table's card: prefills the
-  // composer so the question is scoped to that table, without auto-sending —
-  // the user still reviews/edits it before it goes anywhere.
-  focusTable?: string | null
+  versionId: string
+  mentions: MentionRow[]
+  onAddMention: (row: MentionRow) => void
+  onRemoveMention: (id: string) => void
+  datasetNames?: DatasetNames
+  onEdited: () => void
+  className?: string
 }) {
-  const [sessionId, setSessionId] = React.useState<string | undefined>(extractionSessionId || undefined)
+  const [sessionId, setSessionId] = React.useState<string | undefined>(undefined)
   const [turns, setTurns] = React.useState<Turn[]>([])
-  const [historyLoaded, setHistoryLoaded] = React.useState(!extractionSessionId)
   const [message, setMessage] = React.useState('')
-  // Adjusted during render (React's documented pattern for "sync state to a
-  // changed prop" without an effect) rather than reactively in an effect.
-  const [seededTable, setSeededTable] = React.useState<string | null | undefined>(undefined)
-  if (focusTable && focusTable !== seededTable) {
-    setSeededTable(focusTable)
-    setMessage(`Tell me about the "${focusTable}" table.`)
-  }
   const [isSending, setIsSending] = React.useState(false)
   const [attachments, setAttachments] = React.useState<AdkArtifact[]>([])
   const [isAttaching, setIsAttaching] = React.useState(false)
   const [usage, setUsage] = React.useState<AdkSessionUsage | null>(null)
   const [usageOpen, setUsageOpen] = React.useState(false)
   const [usageLoading, setUsageLoading] = React.useState(false)
+  const [picker, setPicker] = React.useState<{ start: number; query: string } | null>(null)
+  const [activeIndex, setActiveIndex] = React.useState(0)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
-  const endRef = React.useRef<HTMLDivElement>(null)
+  const inputRef = React.useRef<HTMLInputElement>(null)
+  const listRef = React.useRef<HTMLDivElement>(null)
+  const optionsRef = React.useRef<HTMLDivElement>(null)
 
-  React.useEffect(() => {
-    if (open) endRef.current?.scrollIntoView({ block: 'end' })
-  }, [turns.length, isSending, open])
+  const rows = mentions
 
-  // Escape closes the panel, like clicking outside it.
-  React.useEffect(() => {
-    if (!open) return
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onOpenChange(false)
+  const pickerQuery = React.useDeferredValue(picker?.query ?? '')
+  const facts = useFactsByTable(
+    connectionId,
+    { page: 1, pageSize: 8, ...(pickerQuery ? { search: pickerQuery } : {}) },
+    picker !== null
+  )
+  const options = React.useMemo<MentionRow[]>(() => {
+    if (!picker || !facts.data) return []
+    const needle = pickerQuery.trim().toLowerCase()
+    const out: MentionRow[] = []
+    for (const group of facts.data.tables) {
+      const table = tableMention(group.table, datasetNames)
+      const tableHit =
+        !needle || table.label.toLowerCase().includes(needle) || table.fullName.toLowerCase().includes(needle)
+      out.push(table)
+      for (const fact of group.columns) {
+        const column = columnMention(fact, group.table.qualifiedName)
+        if (tableHit || column.label.toLowerCase().includes(needle)) out.push(column)
+      }
     }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [open, onOpenChange])
+    return out.slice(0, MAX_OPTIONS)
+  }, [picker, facts.data, pickerQuery, datasetNames])
 
-  // Earlier chat in the extraction session, loaded the first time the panel opens.
   React.useEffect(() => {
-    if (!open || historyLoaded || !extractionSessionId) return
-    let cancelled = false
-    getAdkSession(connectionId, AGENT, extractionSessionId)
-      .then((detail) => {
-        if (cancelled) return
-        const earlier = chatTurnsAfterExtraction(detail.turns)
-        setTurns((current) => (current.length ? current : earlier))
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (!cancelled) setHistoryLoaded(true)
-      })
-    return () => {
-      cancelled = true
+    const list = listRef.current
+    if (list) list.scrollTop = list.scrollHeight
+  }, [turns.length, isSending])
+
+  React.useEffect(() => {
+    const active = optionsRef.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`)
+    const box = optionsRef.current
+    if (!active || !box) return
+    if (active.offsetTop < box.scrollTop) box.scrollTop = active.offsetTop
+    else if (active.offsetTop + active.offsetHeight > box.scrollTop + box.clientHeight) {
+      box.scrollTop = active.offsetTop + active.offsetHeight - box.clientHeight
     }
-  }, [open, historyLoaded, extractionSessionId, connectionId])
+  }, [activeIndex])
 
   const ensureSession = async (): Promise<string> => {
     if (sessionId) return sessionId
-    const session = await createAdkSession(connectionId, AGENT)
+    const session = await createDescriptionEditorSession(connectionId, { versionId })
     setSessionId(session.sessionId)
     return session.sessionId
   }
 
-  const submit = async (rawText: string) => {
+  const submit = async (rawText: string): Promise<boolean> => {
     const text = rawText.trim()
-    if (isSending || (!text && attachments.length === 0)) return
+    if (isSending || !text || rows.length === 0) return false
 
+    const sentRows = rows
+    const artifactIds = attachments.map((a) => a.id)
     setIsSending(true)
     setTurns((prev) => [
       ...prev,
-      {
-        id: crypto.randomUUID(),
-        role: 'user',
-        text: text || `Attached ${attachments.length} file${attachments.length === 1 ? '' : 's'}.`,
-      },
+      { id: crypto.randomUUID(), role: 'user', text, rows: sentRows, files: attachments.map((a) => a.filename) },
     ])
-    const artifactIds = attachments.map((a) => a.id)
     setAttachments([])
 
     try {
       const activeSession = await ensureSession()
-      const response = await sendAdkMessage(connectionId, AGENT, activeSession, {
+      const response = await sendDescriptionEditorMessage(connectionId, activeSession, {
+        rowIds: sentRows.map((r) => r.id),
         text,
         artifactIds: artifactIds.length ? artifactIds : undefined,
       })
@@ -170,35 +170,81 @@ export function UnderstandChatWidget({
         {
           id: crypto.randomUUID(),
           role: 'agent',
-          text: response.text || (response.interrupted ? 'Stopped.' : ''),
+          text: response.text || (response.interrupted ? 'Stopped.' : 'Done.'),
           toolCalls: response.toolCalls,
           interrupted: response.interrupted,
         },
       ])
-    } catch {
+      onEdited()
+    } catch (err) {
       setTurns((prev) => [
         ...prev,
-        { id: crypto.randomUUID(), role: 'error', text: "Couldn't reach the agent. Please try again." },
+        {
+          id: crypto.randomUUID(),
+          role: 'error',
+          text: errorMessage(err, "Couldn't reach the description editor. Please try again."),
+        },
       ])
     } finally {
       setIsSending(false)
     }
+    return true
   }
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
     const text = message
-    setMessage('')
-    void submit(text)
+    void submit(text).then((sent) => {
+      if (sent) setMessage((current) => (current === text ? '' : current))
+    })
+  }
+
+  const choose = (row: MentionRow) => {
+    if (picker) {
+      const end = picker.start + 1 + picker.query.length
+      const start = picker.start
+      setMessage((current) => current.slice(0, start) + current.slice(end))
+      requestAnimationFrame(() => {
+        inputRef.current?.focus()
+        inputRef.current?.setSelectionRange(start, start)
+      })
+    }
+    onAddMention(row)
+    setPicker(null)
+  }
+
+  const syncPicker = (value: string, caret: number | null) => {
+    const token = mentionTokenAt(value, caret ?? value.length)
+    if (!token) {
+      setPicker(null)
+      return
+    }
+    if (!picker || picker.query !== token.query) setActiveIndex(0)
+    setPicker(token)
+  }
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!picker) return
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setActiveIndex((i) => Math.min(i + 1, Math.max(options.length - 1, 0)))
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setActiveIndex((i) => Math.max(i - 1, 0))
+    } else if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault()
+      const row = options[activeIndex]
+      if (row) choose(row)
+      else setPicker(null)
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      setPicker(null)
+    }
   }
 
   const handleStop = async () => {
     if (!sessionId) return
-    try {
-      await interruptAdkSession(connectionId, AGENT, sessionId)
-    } catch {
-      // The turn's own request still resolves either way; nothing more to do here.
-    }
+    await interruptAdkSession(connectionId, AGENT, sessionId).catch(() => undefined)
   }
 
   const handleFile = async (file: File | null) => {
@@ -237,126 +283,167 @@ export function UnderstandChatWidget({
     }
   }
 
+  const applySuggestion = (suggestion: string) => {
+    if (rows.length > 0) {
+      void submit(suggestion)
+      return
+    }
+    setMessage(suggestion)
+    inputRef.current?.focus()
+  }
+
+  const hasContext = rows.length > 0 || attachments.length > 0
+  const mentionIds = new Set(mentions.map((m) => m.id))
+
   return (
-    <>
-      {open && (
-        // Clicking anywhere outside the panel closes it.
-        <div
-          className="fixed inset-0 z-40 bg-black/20"
-          aria-hidden
-          onClick={() => onOpenChange(false)}
-        />
+    <section
+      aria-label="Description editor"
+      className={cn('flex flex-col overflow-hidden rounded-xl border bg-background shadow-sm', className)}
+    >
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-sidebar px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2 text-sidebar-foreground">
+          <Sparkles className="size-4 shrink-0" />
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold">Description editor</span>
+            <span className="block truncate text-[11px] text-sidebar-foreground/70">
+              Rewrites table and column descriptions in this draft
+            </span>
+          </span>
+        </div>
+        <Hint label="Usage for this chat">
+          <button
+            type="button"
+            aria-label="Usage for this chat"
+            disabled={!sessionId}
+            onClick={() => void toggleUsage()}
+            className="shrink-0 cursor-pointer rounded-md p-1.5 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <BarChart3 className="size-4" />
+          </button>
+        </Hint>
+      </div>
+
+      {usageOpen && (
+        <div className="shrink-0 border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
+          {usageLoading ? (
+            <span className="flex items-center gap-1.5">
+              <Loader2 className="size-3 animate-spin" /> Loading usage…
+            </span>
+          ) : usage ? (
+            formatUsage(usage)
+          ) : (
+            'Send a message to see usage for this chat.'
+          )}
+        </div>
       )}
-      {open && (
-        <div
-          role="dialog"
-          aria-label="Ask about this data"
-          className="fixed top-1/2 right-3 z-50 flex h-[92dvh] w-[calc(100%-1.5rem)] max-w-md -translate-y-1/2 flex-col overflow-hidden rounded-xl border bg-background shadow-2xl"
-        >
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-sidebar px-4 py-3">
-            <div className="flex min-w-0 items-center gap-2 text-sidebar-foreground">
-              <Sparkles className="size-4 shrink-0" />
-              <span className="truncate text-sm font-semibold">Ask about this data</span>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <button
-                type="button"
-                aria-label="Usage for this chat"
-                disabled={!sessionId}
-                onClick={() => void toggleUsage()}
-                className="cursor-pointer rounded-md p-1.5 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <BarChart3 className="size-4" />
-              </button>
-              <button
-                type="button"
-                aria-label="Close chat"
-                onClick={() => onOpenChange(false)}
-                className="cursor-pointer rounded-md p-1.5 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-              >
-                <X className="size-4" />
-              </button>
+
+      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-4">
+        {turns.length === 0 && !isSending ? (
+          <div className="flex min-h-full flex-col items-center justify-center gap-4">
+            <ChatBalloon className="w-24" />
+            <div className="flex w-full flex-col gap-2">
+              {SUGGESTIONS.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => applySuggestion(suggestion)}
+                  className="cursor-pointer rounded-xl border bg-card px-3 py-2 text-left text-sm text-foreground hover:border-foreground/30 hover:bg-accent/30"
+                >
+                  {suggestion}
+                </button>
+              ))}
             </div>
           </div>
-
-          {usageOpen && (
-            <div className="shrink-0 border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
-              {usageLoading ? (
-                <span className="flex items-center gap-1.5">
-                  <Loader2 className="size-3 animate-spin" /> Loading usage…
-                </span>
-              ) : usage ? (
-                formatUsage(usage)
-              ) : (
-                'Send a message to see usage for this chat.'
-              )}
-            </div>
-          )}
-
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            {turns.length === 0 && !isSending ? (
-              <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-                <span className="grid size-12 place-items-center rounded-full bg-primary/10 text-primary">
-                  <Sparkles className="size-5" />
-                </span>
-                <div className="flex flex-col gap-1">
-                  <span className="text-base font-semibold text-foreground">Let's get started</span>
-                  <span className="text-sm text-muted-foreground">
-                    Ask a question about this data, or attach a file for context.
-                  </span>
-                </div>
-                <div className="flex w-full flex-col gap-2">
-                  {SUGGESTIONS.map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      type="button"
-                      onClick={() => void submit(suggestion)}
-                      className="cursor-pointer rounded-xl border bg-card px-3 py-2 text-left text-sm text-foreground hover:border-foreground/30 hover:bg-accent/30"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="flex min-w-0 flex-col gap-3">
-                {turns.map((turn) => (
-                  <TurnBubble key={turn.id} turn={turn} />
-                ))}
-                {isSending && (
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Loader2 className="size-3 animate-spin" /> Thinking…
-                  </div>
-                )}
-                <div ref={endRef} />
+        ) : (
+          <div className="flex min-w-0 flex-col gap-3">
+            {turns.map((turn) => (
+              <TurnBubble key={turn.id} turn={turn} />
+            ))}
+            {isSending && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="size-3 animate-spin" /> Rewriting…
               </div>
             )}
           </div>
+        )}
+      </div>
 
-          {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 border-t bg-card px-3 pt-2">
-              {attachments.map((artifact) => (
-                <span
-                  key={artifact.id}
-                  className="flex items-center gap-1.5 rounded-full border bg-muted px-2.5 py-1 text-xs text-foreground"
+      {hasContext && (
+        <div className="flex max-h-28 shrink-0 flex-wrap items-center gap-1.5 overflow-y-auto border-t bg-card px-3 pt-2">
+          {mentions.map((row) => (
+            <Chip
+              key={row.id}
+              icon={<AtSign className="size-3 shrink-0" />}
+              label={row.label}
+              hint={row.fullName}
+              onRemove={() => onRemoveMention(row.id)}
+              removeLabel={`Remove ${row.label}`}
+            />
+          ))}
+          {attachments.map((artifact) => (
+            <Chip
+              key={artifact.id}
+              icon={<Paperclip className="size-3 shrink-0" />}
+              label={artifact.filename}
+              hint={artifact.filename}
+              detail={formatSize(artifact.sizeBytes)}
+              onRemove={() => setAttachments((prev) => prev.filter((a) => a.id !== artifact.id))}
+              removeLabel={`Remove ${artifact.filename}`}
+            />
+          ))}
+        </div>
+      )}
+
+      <form
+        className={cn('relative flex shrink-0 flex-col gap-1.5 p-3', !hasContext && 'border-t bg-card')}
+        onSubmit={handleSubmit}
+      >
+        {picker ? (
+          <div
+            ref={optionsRef}
+            id="description-editor-mentions"
+            role="listbox"
+            aria-label="Tables and columns"
+            className="absolute inset-x-3 bottom-full mb-1 max-h-64 overflow-y-auto rounded-lg border bg-popover p-1 shadow-lg"
+          >
+            {options.length === 0 ? (
+              <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+                {facts.isFetching ? 'Searching…' : 'No table or column matches that.'}
+              </p>
+            ) : (
+              options.map((row, i) => (
+                <div
+                  key={row.id}
+                  id={`description-editor-mention-${i}`}
+                  data-index={i}
+                  role="option"
+                  aria-selected={i === activeIndex}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onMouseEnter={() => setActiveIndex(i)}
+                  onClick={() => choose(row)}
+                  className={cn(
+                    'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm',
+                    row.kind === 'column' && 'pl-7',
+                    i === activeIndex && 'bg-accent'
+                  )}
                 >
-                  <Paperclip className="size-3 shrink-0" />
-                  <span className="max-w-32 truncate">{artifact.filename}</span>
-                  <span className="text-muted-foreground">{formatSize(artifact.sizeBytes)}</span>
-                  <button
-                    type="button"
-                    aria-label={`Remove ${artifact.filename}`}
-                    onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== artifact.id))}
-                    className="cursor-pointer text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="size-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
+                  {row.kind === 'table' ? (
+                    <Table2 className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                  ) : (
+                    <Columns3 className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                  )}
+                  <span className={cn('min-w-0 flex-1 truncate', row.kind === 'table' ? 'font-medium' : 'font-mono text-xs')}>
+                    {row.label}
+                  </span>
+                  {mentionIds.has(row.id) ? <span className="text-[10px] text-primary">added</span> : null}
+                </div>
+              ))
+            )}
+          </div>
+        ) : null}
 
-          <form className={cn('flex shrink-0 items-center gap-1.5 p-3', attachments.length === 0 && 'border-t bg-card')} onSubmit={handleSubmit}>
+        <div className="flex items-center gap-1.5">
+          <Hint label="Attach a file">
             <Button
               type="button"
               variant="outline"
@@ -368,22 +455,36 @@ export function UnderstandChatWidget({
             >
               {isAttaching ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
             </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              onChange={(event) => {
-                void handleFile(event.target.files?.[0] ?? null)
-                event.target.value = ''
-              }}
-            />
-            <Input
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder="Ask about this data…"
-              className="h-9 flex-1 rounded-full px-3"
-            />
-            {isSending ? (
+          </Hint>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(event) => {
+              void handleFile(event.target.files?.[0] ?? null)
+              event.target.value = ''
+            }}
+          />
+          <Input
+            ref={inputRef}
+            value={message}
+            onChange={(event) => {
+              setMessage(event.target.value)
+              syncPicker(event.target.value, event.target.selectionStart)
+            }}
+            onClick={(event) => syncPicker(event.currentTarget.value, event.currentTarget.selectionStart)}
+            onKeyDown={handleKeyDown}
+            onBlur={() => setPicker(null)}
+            placeholder={rows.length ? 'How should the descriptions change?' : 'Type @ to mention tables or columns…'}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={picker !== null}
+            aria-controls={picker ? 'description-editor-mentions' : undefined}
+            aria-activedescendant={picker && options[activeIndex] ? `description-editor-mention-${activeIndex}` : undefined}
+            className="h-9 flex-1 rounded-full px-3"
+          />
+          {isSending ? (
+            <Hint label="Stop">
               <Button
                 type="button"
                 size="icon"
@@ -394,28 +495,85 @@ export function UnderstandChatWidget({
               >
                 <Square className="size-3.5" />
               </Button>
-            ) : (
+            </Hint>
+          ) : (
+            <Hint label="Send">
               <Button
                 type="submit"
                 size="icon"
                 className="size-9 shrink-0 cursor-pointer rounded-full"
                 aria-label="Send"
-                disabled={!message.trim() && attachments.length === 0}
+                disabled={!message.trim() || rows.length === 0 || picker !== null}
               >
                 <ArrowUp className="size-4" />
               </Button>
-            )}
-          </form>
+            </Hint>
+          )}
         </div>
-      )}
-    </>
+      </form>
+    </section>
+  )
+}
+
+function Chip({
+  icon,
+  label,
+  hint,
+  detail,
+  onRemove,
+  removeLabel,
+}: {
+  icon: React.ReactNode
+  label: string
+  hint: string
+  detail?: string
+  onRemove: () => void
+  removeLabel: string
+}) {
+  return (
+    <span className="flex max-w-full items-center gap-1.5 rounded-full border bg-muted px-2.5 py-1 text-xs text-foreground">
+      {icon}
+      <Hint label={hint}>
+        <span className="min-w-0 max-w-44 truncate font-medium">{label}</span>
+      </Hint>
+      {detail ? <span className="text-muted-foreground">{detail}</span> : null}
+      <Hint label={removeLabel}>
+        <button
+          type="button"
+          aria-label={removeLabel}
+          onClick={onRemove}
+          className="cursor-pointer text-muted-foreground hover:text-foreground"
+        >
+          <X className="size-3" />
+        </button>
+      </Hint>
+    </span>
   )
 }
 
 function TurnBubble({ turn }: { turn: Turn }) {
   if (turn.role === 'user') {
     return (
-      <div className="flex justify-end">
+      <div className="flex flex-col items-end gap-1">
+        <div className="flex max-w-[85%] flex-wrap justify-end gap-1">
+          {turn.rows.map((row) => (
+            <Hint key={row.id} label={row.fullName}>
+              <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
+                <AtSign className="size-2.5 shrink-0" aria-hidden />
+                <span className="truncate">{row.label}</span>
+              </span>
+            </Hint>
+          ))}
+          {turn.files.map((name) => (
+            <span
+              key={name}
+              className="inline-flex max-w-full items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+            >
+              <Paperclip className="size-2.5 shrink-0" aria-hidden />
+              <span className="truncate">{name}</span>
+            </span>
+          ))}
+        </div>
         <p className="max-w-[85%] rounded-2xl bg-primary px-3 py-1.5 text-sm whitespace-pre-wrap text-primary-foreground">
           {turn.text}
         </p>

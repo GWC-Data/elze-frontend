@@ -11,7 +11,7 @@ export const MCP_CONFIG = {
     { name: 'list_context_objects', description: 'List the facts recorded for this connection, filterable by type.' },
     { name: 'get_context_object', description: 'Read one fact by id or qualified name.' },
     { name: 'search_context_objects', description: 'Semantic search over the facts.' },
-    { name: 'query_sql', description: 'Read-only SELECT / WITH over the context store, scoped to the workspace.' },
+    { name: 'query_sql', description: 'Read-only SELECT / WITH over the context store, scoped to the context.' },
   ],
 } as const
 

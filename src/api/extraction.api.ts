@@ -1,8 +1,7 @@
 import {
-  createAdkSession,
+  createContextLayerSession,
   getAdkSession,
-  listAdkSessions,
-  sendAdkMessage,
+  triggerContextLayer,
 } from '@/api/adk.api'
 
 const AGENT = 'context_layer_extractor' as const
@@ -16,45 +15,40 @@ export interface ExtractionResult {
   extractedAt?: string | null
 }
 
-export async function runExtraction(
-  connectionId: string,
-  datasetIds: string[],
-  options: { domain?: string } = {}
-): Promise<ExtractionResult> {
-  const session = await createAdkSession(connectionId, AGENT)
+export interface ExtractionTarget {
+  versionId: string
+  contextName: string
+  contextDescription?: string | null
+  datasetIds: string[]
+}
 
-  const response = await sendAdkMessage(connectionId, AGENT, session.sessionId, {
-    text: '',
-    datasetIds,
-    ...(options.domain ? { domain: options.domain } : {}),
+export async function runExtraction(contextId: string, target: ExtractionTarget): Promise<ExtractionResult> {
+  const session = await createContextLayerSession(contextId, {
+    versionId: target.versionId,
+    contextName: target.contextName,
+    contextDescription: target.contextDescription,
+    datasetIds: target.datasetIds,
   })
+
+  const { success } = await triggerContextLayer(contextId, session.sessionId)
+  if (!success) throw new Error('The context extraction was interrupted before it finished.')
+
+  const report = await fetchExtractionSession(contextId, session.sessionId).catch(() => null)
 
   return {
     sessionId: session.sessionId,
-    text: response.text,
-    toolCalls: response.toolCalls,
-    interrupted: response.interrupted,
+    text: report?.text ?? '',
+    toolCalls: [],
+    interrupted: false,
+    datasetIds: target.datasetIds,
   }
 }
 
-export async function fetchLatestExtraction(
-  connectionId: string
-): Promise<ExtractionResult | null> {
-  const sessions = await listAdkSessions(connectionId, AGENT)
-  if (!sessions.length) return null
-
-  const latest = [...sessions].sort(
-    (a, b) => (b.lastUpdateTime ?? 0) - (a.lastUpdateTime ?? 0)
-  )[0]
-
-  return fetchExtractionSession(connectionId, latest.sessionId)
-}
-
 export async function fetchExtractionSession(
-  connectionId: string,
+  contextId: string,
   sessionId: string
 ): Promise<ExtractionResult | null> {
-  const detail = await getAdkSession(connectionId, AGENT, sessionId)
+  const detail = await getAdkSession(contextId, AGENT, sessionId)
   const answer = [...detail.turns].reverse().find((turn) => turn.role !== 'user')
   if (!answer || !answer.text.trim()) return null
 

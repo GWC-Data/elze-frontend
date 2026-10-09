@@ -7,7 +7,7 @@ export function AgentReport({ text }: { text: string }) {
   return (
     <section className="overflow-hidden rounded-xl border bg-card shadow-xs">
       <header className="border-b px-8 pb-5 pt-7">
-        <div className="mx-auto min-w-0 max-w-[72ch]">
+        <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Agent report</p>
           <h3 className="mt-1 font-serif text-3xl font-semibold leading-tight tracking-tight">What the agent did</h3>
           <p className="mt-2 truncate text-xs text-muted-foreground">
@@ -16,10 +16,10 @@ export function AgentReport({ text }: { text: string }) {
         </div>
       </header>
       <div className="max-h-[720px] overflow-y-auto px-8 py-6">
-        <div className="mx-auto max-w-[72ch] font-serif text-[16px] leading-8">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN}>
-          {text}
-        </ReactMarkdown>
+        <div className="font-serif text-[16px] leading-8">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN}>
+            {text}
+          </ReactMarkdown>
         </div>
       </div>
     </section>

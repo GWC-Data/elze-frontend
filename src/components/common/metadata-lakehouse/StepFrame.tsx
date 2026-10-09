@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { WORKFLOW_STEPS, stepIndex, useWorkflow } from '@/context/workflowContext'
 import { BusyOverlay, RefreshingBar } from '@/components/common/metadata-lakehouse/DataStates'
 
@@ -21,12 +22,11 @@ export function StepFrame({
   pendingLabel = 'Saving…',
   pendingOverlay,
   refreshing = false,
+  scrollBody = true,
 }: {
   title: string
   description?: ReactNode
   actions?: ReactNode
-  // Rendered on its own row, right-aligned, directly under the Back/Next row —
-  // for a control that belongs with this step's actions but shouldn't crowd them.
   headerExtra?: ReactNode
   children: ReactNode
   nextDisabled?: boolean
@@ -39,6 +39,7 @@ export function StepFrame({
   pendingLabel?: string
   pendingOverlay?: { title: string; detail?: ReactNode }
   refreshing?: boolean
+  scrollBody?: boolean
 }) {
   const { step, next, back, readOnly } = useWorkflow()
   const index = stepIndex(step)
@@ -104,7 +105,7 @@ export function StepFrame({
         </div>
       </header>
 
-      <div className="relative min-h-0 flex-1 overflow-auto px-6 py-6">
+      <div className={cn('relative min-h-0 flex-1 px-6 py-6', scrollBody && 'overflow-auto')}>
         <RefreshingBar active={refreshing && !busy} />
         {children}
         {busy && pendingOverlay && !readOnly ? (

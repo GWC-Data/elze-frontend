@@ -6,13 +6,15 @@ import { ConnectionPicker } from "@/components/common/agent/ConnectionPicker"
 import { AdkChatWorkbench } from "@/components/common/agent/AdkChatWorkbench"
 import {
   createPlaybookBuilderSession,
-  deletePlaybookBuilderSession,
-  getPlaybookBuilderSession,
-  getPlaybookBuilderSessionUsage,
-  interruptPlaybookBuilderSession,
-  listPlaybookBuilderSessions,
-  sendPlaybookBuilderMessage,
+  deleteAdkSession,
+  getAdkSession,
+  getAdkSessionUsage,
+  interruptAdkSession,
+  listAdkSessions,
+  sendAdkMessage,
 } from "@/api/adk.api"
+
+const AGENT = "playbook_builder" as const
 
 export default function PlaybookBuilderPage() {
   const { connectionId, sessionId } = useParams<{ connectionId?: string; sessionId?: string }>()
@@ -29,7 +31,7 @@ export default function PlaybookBuilderPage() {
 function PlaybookBuilderChat({ connectionId, sessionId }: { connectionId: string; sessionId?: string }) {
   const paths = usePaths()
   const location = useLocation()
-  const sessionsQuery = useAsync(() => listPlaybookBuilderSessions(connectionId), [connectionId])
+  const sessionsQuery = useAsync(() => listAdkSessions(connectionId, AGENT), [connectionId])
 
   const autoSendMessage = (location.state as { autoSendMessage?: string } | null)?.autoSendMessage
 
@@ -40,14 +42,14 @@ function PlaybookBuilderChat({ connectionId, sessionId }: { connectionId: string
       emptyTitle="What playbook do you want to build?"
       emptyBody="Describe the recurring report or analysis you need — let's turn it into a playbook."
       placeholder="Describe the playbook you want to build…"
-      loadSession={(sid) => getPlaybookBuilderSession(connectionId, sid)}
+      loadSession={(sid) => getAdkSession(connectionId, AGENT, sid)}
       createSession={() => createPlaybookBuilderSession(connectionId)}
-      sendMessage={(sid, text) => sendPlaybookBuilderMessage(connectionId, sid, text)}
-      interrupt={(sid) => interruptPlaybookBuilderSession(connectionId, sid)}
-      getUsage={(sid) => getPlaybookBuilderSessionUsage(connectionId, sid)}
+      sendMessage={(sid, text) => sendAdkMessage(connectionId, AGENT, sid, { text })}
+      interrupt={(sid) => interruptAdkSession(connectionId, AGENT, sid)}
+      getUsage={(sid) => getAdkSessionUsage(connectionId, AGENT, sid)}
       sessions={sessionsQuery.error ? [] : sessionsQuery.data}
       reloadSessions={sessionsQuery.reload}
-      onDeleteSession={(sid) => deletePlaybookBuilderSession(connectionId, sid)}
+      onDeleteSession={(sid) => deleteAdkSession(connectionId, AGENT, sid)}
       initialAutoSend={autoSendMessage}
     />
   )

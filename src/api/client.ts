@@ -231,15 +231,6 @@ export function isForbidden(err: unknown): boolean {
   return code === 'INSUFFICIENT_PERMISSION' || code === 'TENANT_ACCESS_DENIED' || code === 'FEATURE_NOT_ENABLED'
 }
 
-// ------------------------------------------------------------------ agent services
-//
-// In a deployed stack every /svc/* call passes the backend's agent gate first (nginx
-// auth_request, backend/src/routes/gate.routes.ts). So an agent call can now fail the way an
-// /api call does: 401 when the 15-minute access token lapsed, 403 when the company lacks the
-// feature or the role the permission. These helpers give agent calls the same single-flight
-// renewal `http` has, and a readable refusal. Against a service called directly (local dev,
-// no gate) a 401 simply renews once and returns the same answer.
-
 const GATE_REASON_HEADER = 'x-gate-reason'
 
 function agentRefusal(status: number, reason: string | null | undefined): string | null {

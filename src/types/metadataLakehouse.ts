@@ -15,6 +15,42 @@ export interface CredentialField {
   help?: string
 }
 
+export type ContextAccessLevel = 'view' | 'edit' | 'full'
+export type GeneralAccess = 'restricted' | 'company'
+
+export interface ContextOwner {
+  id: number
+  name: string | null
+}
+
+export interface ContextAccess {
+  level: ContextAccessLevel
+  owner: ContextOwner | null
+  isOwner: boolean
+  canShare: boolean
+  generalAccess: GeneralAccess
+}
+
+export interface ContextSharePerson {
+  userId: number
+  username: string
+  email: string
+  displayName: string | null
+}
+
+export interface ContextShareGrant extends ContextSharePerson {
+  level: ContextAccessLevel
+  grantedAt: string
+  active: boolean
+}
+
+export interface ContextSharing {
+  owner: ContextOwner | null
+  generalAccess: GeneralAccess
+  people: ContextShareGrant[]
+  you: { level: ContextAccessLevel; isOwner: boolean; canShare: boolean }
+}
+
 export interface Connection {
   id: string
   companyId: number
@@ -30,6 +66,7 @@ export interface Connection {
   selectedDatasets?: SelectedDataset[]
   context?: ContextVersionHeadline | null
   published?: ContextVersionHeadline | null
+  access?: ContextAccess
 }
 
 export interface PublishedConnection {
@@ -66,6 +103,7 @@ export interface PublishedContextGroup {
   companyId: number | null
   companyName: string | null
   name: string
+  access?: ContextAccess | null
   versions: PublishedVersionEntry[]
 }
 

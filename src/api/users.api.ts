@@ -8,7 +8,6 @@ export interface NewPerson {
   email: string
   displayName?: string
   role: RoleName
-  // A company role for a member (role USER only); omitted = the built-in Member role.
   customRoleId?: number | null
   companyId?: number
 }

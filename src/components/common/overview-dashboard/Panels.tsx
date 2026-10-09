@@ -118,7 +118,6 @@ export interface AttentionItem {
   tone?: 'warning' | 'danger'
 }
 
-/** "Needs attention": warnings when there are some, an all-clear line otherwise. */
 export function AttentionPanel({ items, loading }: { items: AttentionItem[]; loading?: boolean }) {
   return (
     <Panel title="Needs attention" description="Things waiting on someone">

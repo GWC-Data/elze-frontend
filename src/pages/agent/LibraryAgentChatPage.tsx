@@ -17,16 +17,12 @@ import { MessageIdentity, ThinkingSection } from "@/components/common/agent/Thin
 import { downloadTextMessage, MessageRow } from "@/components/common/agent/MessageRow"
 import { exportToolDataAsPdf } from "@/components/common/agent/tools/PdfExportTemplate"
 import { ScheduleDialog } from "@/components/common/agent-library/ScheduleDialog"
-import { AgentIllustration } from "@/components/common/agent-library/AgentIllustration"
+import { ChatBalloon } from "@/components/common/agent/ChatBalloon"
 import { InlineLoading, NotFoundState, ErrorState } from "@/components/common/States"
 import type { ChatMessage } from "@/types/agent"
 import type { ToolEngineData } from "@/types/agentTools"
 import type { LibraryAgent, LibraryChatSession } from "@/types/agentLibrary"
 
-// The chat window for one library agent: the Data analyst's layout and message rendering
-// (MessageRow, ThinkingSection), with the agent's name and knowledge fixed in the header
-// instead of a context picker. Transport is libraryChatApi — see that file for which
-// service answers.
 export default function LibraryAgentChatPage() {
   const { agentId = "", sessionId } = useParams<{ agentId: string; sessionId?: string }>()
   const paths = usePaths()
@@ -51,8 +47,6 @@ export default function LibraryAgentChatPage() {
   )
   const sessions = agent ? (sessionsQuery.error ? [] : sessionsQuery.data) : null
 
-  // Server history for the open chat, plus what this view has sent since. `local` is keyed
-  // by conversation so switching chats never shows another chat's messages.
   const viewKey = sessionId ?? "new"
   const history = useAsync(
     () =>
@@ -78,8 +72,6 @@ export default function LibraryAgentChatPage() {
 
   const submitMessage = async (text: string) => {
     if (!agent || !text || isSending) return false
-    // No Agent Library backend configured yet: the chat UI is shown as usual, but there is no
-    // service to answer, so say so briefly instead of sending into nothing.
     if (!libraryChatAvailable) {
       toast("This agent can't reply yet", { description: "Agent chat is coming soon." })
       return false
@@ -314,7 +306,7 @@ export default function LibraryAgentChatPage() {
           <div className="min-h-0 flex-1 overflow-auto p-4">
             {showEmptyState ? (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-                <AgentIllustration className="w-52" />
+                <ChatBalloon />
                 <div className="flex flex-col gap-1 text-muted-foreground">
                   <span className="text-base font-semibold text-card-foreground">Ask {agent.name} anything</span>
                   <span>

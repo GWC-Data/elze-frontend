@@ -1,5 +1,4 @@
 import { useDeferredValue, useState } from 'react'
-import type { ReactNode } from 'react'
 import { Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -8,6 +7,7 @@ import { serverPage } from '@/hooks/usePagination'
 import { formatExact } from '@/lib/format'
 import { DEFAULT_GLOSSARY_QUERY, useUnderstanding } from '@/hooks/useMetadataLakehouse'
 import type { GlossaryFilter, GlossaryTermState, Understanding } from '@/types/metadataLakehouse'
+import { ReadableText, ShortIds } from '@/components/common/metadata-lakehouse/steps/ReadableText'
 
 const STATE_LABEL: Record<GlossaryTermState, string> = {
   ai_generated: 'AI generated',
@@ -54,34 +54,21 @@ export function GlossaryView({ connectionId }: { connectionId: string }) {
   const average =
     stats.averageConfidence === null ? null : Math.round(stats.averageConfidence * 100)
 
+  const plural = (n: number, word: string) => `${formatExact(n)} ${word}${n === 1 ? '' : 's'}`
+
   return (
-    <div className="space-y-6">
-      <div className="grid gap-5 sm:grid-cols-3">
-        <SummaryTile
-          label="Terms generated"
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <StatPill
+          label="Terms"
           value={formatExact(stats.termsGenerated)}
-          hint={`Across ${formatExact(stats.entityCount)} table${stats.entityCount === 1 ? '' : 's'}, ${formatExact(stats.metricCount)} metric${stats.metricCount === 1 ? '' : 's'} and ${formatExact(stats.dimensionCount)} dimension${stats.dimensionCount === 1 ? '' : 's'}`}
+          hint={`${plural(stats.entityCount, 'table')} · ${plural(stats.metricCount, 'metric')} · ${plural(stats.dimensionCount, 'dimension')}`}
         />
-        <SummaryTile
-          label="Average confidence"
-          value={average === null ? '—' : `${average}%`}
-          hint={
-            <span className="inline-flex text-xs font-medium text-muted-foreground">
-              AI generated
-            </span>
-          }
-        />
-        <SummaryTile
+        <StatPill label="Avg confidence" value={average === null ? '—' : `${average}%`} />
+        <StatPill
           label="Human approved"
           value={formatExact(stats.humanApproved)}
-          hint={
-            <>
-              <span className="font-semibold text-primary">
-                +{formatExact(stats.approvedThisWeek)}
-              </span>{' '}
-              this week
-            </>
-          }
+          hint={stats.approvedThisWeek ? `+${formatExact(stats.approvedThisWeek)} this week` : undefined}
         />
       </div>
 
@@ -104,21 +91,13 @@ export function GlossaryView({ connectionId }: { connectionId: string }) {
   )
 }
 
-function SummaryTile({
-  label,
-  value,
-  hint,
-}: {
-  label: string
-  value: string
-  hint: ReactNode
-}) {
+function StatPill({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-2xl border bg-card px-6 py-5 shadow-xs">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">{label}</p>
-      <p className="mt-2 font-serif text-4xl font-semibold tabular-nums leading-none tracking-tight">{value}</p>
-      <div className="mt-2 font-serif text-sm italic text-muted-foreground">{hint}</div>
-    </div>
+    <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+      {label}
+      <span className="font-semibold text-foreground tabular-nums">{value}</span>
+      {hint ? <span className="text-muted-foreground/80">{hint}</span> : null}
+    </span>
   )
 }
 
@@ -188,7 +167,15 @@ function GlossaryTable({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[760px] table-fixed text-sm">
+          <colgroup>
+            <col className="w-[16%]" />
+            <col className="w-[8%]" />
+            <col className="w-[46%]" />
+            <col className="w-[14%]" />
+            <col className="w-[8%]" />
+            <col className="w-[8%]" />
+          </colgroup>
           <thead className="border-y text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             <tr>
               <th scope="col" className="px-5 py-3 font-medium">Term</th>
@@ -201,23 +188,29 @@ function GlossaryTable({
           </thead>
           <tbody className="divide-y">
             {data.terms.map((t) => (
-              <tr key={t.id} className="align-middle transition-colors hover:bg-muted/30">
-                <td className="max-w-[200px] px-5 py-4 font-serif text-[15.5px] font-semibold text-foreground">{t.term}</td>
-                <td className="px-4 py-3">
+              <tr key={t.id} className="align-top transition-colors hover:bg-muted/30">
+                <td className="break-words px-5 py-4 font-serif text-[15px] font-semibold text-foreground">
+                  <ShortIds text={t.term} />
+                </td>
+                <td className="px-4 py-4">
                   <span className="inline-flex text-xs font-medium text-muted-foreground">
                     {t.typeLabel}
                   </span>
                 </td>
-                <td className="min-w-[260px] max-w-[460px] px-4 py-4 font-serif text-[15px] leading-7 text-foreground/80">
-                  {t.definition ?? <span className="italic">No definition recorded</span>}
+                <td className="px-4 py-4">
+                  {t.definition ? (
+                    <ReadableText text={t.definition} />
+                  ) : (
+                    <span className="text-sm italic text-muted-foreground">No definition recorded</span>
+                  )}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground">
-                  {t.appliesTo ?? '—'}
+                <td className="break-words px-4 py-4 font-mono text-xs text-muted-foreground">
+                  {t.appliesTo ? <ShortIds text={t.appliesTo} /> : '—'}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-4">
                   <Confidence value={t.confidence} />
                 </td>
-                <td className="whitespace-nowrap px-4 py-3">
+                <td className="px-4 py-4">
                   <span
                     className={cn(
                       'inline-flex text-xs font-semibold',

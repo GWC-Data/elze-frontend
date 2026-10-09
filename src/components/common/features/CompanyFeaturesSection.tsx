@@ -8,11 +8,6 @@ import { FeatureToggles } from '@/components/common/features/FeatureToggles'
 import { notify } from '@/lib/notify'
 import type { CompanyFeature, FeatureId } from '@/types/admin'
 
-// The platform owner's switches for one company. Works whether the company is active or
-// deactivated. Each switch saves at once - the backend takes the whole set, so the set
-// sent is "what is on after this change". Turning one off is confirmed first: the company's
-// members lose it on their next request (nothing is deleted, and turning it back on
-// restores every role exactly as it was).
 export function CompanyFeaturesSection({
   companyId,
   companyName,

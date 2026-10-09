@@ -37,7 +37,6 @@ import type {
 
 export function PublishStep() {
   const { connectionId, goToStep, readOnly } = useWorkflow()
-  // Editing a draft (context.update) and publishing it (context.publish) are separate grants.
   const canPublish = useAuth().can('context.publish')
   const summary = usePublishSummary(connectionId)
   const validate = useValidatePublish(connectionId)

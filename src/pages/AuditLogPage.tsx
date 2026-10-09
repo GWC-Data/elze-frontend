@@ -74,7 +74,6 @@ const ACTION_OPTIONS: { value: AuditAction; label: string }[] = [
 
 const ALL = 'all'
 
-/** Before the first page arrives, guess the scope from the role so the heading doesn't flicker. */
 function expectedScope(shell: 'platform' | 'workspace', role: string | undefined): AuditScope {
   if (shell === 'platform') return 'all'
   return role === 'COMPANY_ADMIN' ? 'company' : 'self'

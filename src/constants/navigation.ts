@@ -21,9 +21,6 @@ import {
 } from 'lucide-react'
 import type { AppPaths } from '@/router/paths'
 
-// A sidebar item appears when its `permission` is held. The server already removes the
-// permissions of features the company does not have (backend constants/features.ts), so the
-// platform owner's feature toggles and the company admin's roles are both answered by `can`.
 import type { RoleName } from '@/types/auth'
 
 export interface NavItem {
@@ -133,7 +130,6 @@ function workspaceGroups(paths: AppPaths, role?: RoleName): NavGroup[] {
     {
       title: 'Activity',
       items: [
-        // Same page for both: the server scopes it to the company for an admin, to the account otherwise.
         { label: role === 'COMPANY_ADMIN' ? 'Audit log' : 'My activity', path: paths.audit, icon: History },
       ],
     },

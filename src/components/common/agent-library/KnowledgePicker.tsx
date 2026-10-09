@@ -22,9 +22,6 @@ function toRef(option: PublishedContextOption): AgentKnowledgeRef {
   }
 }
 
-// Published Metadata Lakehouse versions, grouped per context, as a multi-select. Only
-// published versions are offered: a draft still edits the live rows, so it is not a
-// stable thing to hand an agent.
 export function KnowledgePicker({
   value,
   onChange,
@@ -47,8 +44,6 @@ export function KnowledgePicker({
 
   const selected = React.useMemo(() => new Set(value.map((ref) => ref.contextVersionId)), [value])
 
-  // An attached version that is no longer published stays listed (and removable), so the
-  // agent never loses knowledge silently.
   const missing = React.useMemo(() => {
     if (!data) return []
     const known = new Set(data.map((item) => item.id))

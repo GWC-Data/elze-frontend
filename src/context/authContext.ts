@@ -12,8 +12,6 @@ export interface AuthState {
   refresh: () => Promise<void>
 
   can: (permission: string) => boolean
-  // Whether this account can use a feature at all: enabled for its company AND its role holds
-  // something in it. The server sends only those (never the company's other features).
   hasFeature: (feature: string) => boolean
 }
 

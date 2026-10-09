@@ -11,8 +11,6 @@ const TONE_ICON = {
   neutral: Activity,
 } as const
 
-// Metadata Lakehouse changes only (creates, edits, publishes, deletes): sign-ins and
-// sign-outs never show here. The full trail, with filters, is the audit log.
 export function RecentActivity({
   to,
   description,

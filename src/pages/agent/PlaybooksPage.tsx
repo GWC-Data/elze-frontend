@@ -11,27 +11,17 @@ import { Button } from "@/components/ui/workbench/button"
 import { Skeleton } from "@/components/ui/workbench/skeleton"
 import { ConnectionPicker } from "@/components/common/agent/ConnectionPicker"
 import {
-  createAdkSession,
+  createDataAnalystSession,
   createPlaybookBuilderSession,
   listAdkPlaybooks,
 } from "@/api/adk.api"
 import type { AdkPlaybookSummary } from "@/types/adk"
 
-const DATA_ANALYST = "data_analyst" as const
-
-// Publishing only ever happens conversationally (the playbook_builder agent
-// calls its own publish_playbook tool mid-chat) — there is no REST publish or
-// delete call. After sending a publish request we poll the read-only list for
-// a few seconds and toast once the draft flips to published.
 async function pollForPublished(connectionId: string, playbookId: string): Promise<boolean> {
   for (let attempt = 0; attempt < 8; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 1500))
-    try {
-      const published = await listAdkPlaybooks(connectionId, "published")
-      if (published.some((p) => p.playbookId === playbookId)) return true
-    } catch {
-      // Keep polling; a transient failure here shouldn't stop the attempt.
-    }
+    const published = await listAdkPlaybooks(connectionId, "published").catch((): AdkPlaybookSummary[] => [])
+    if (published.some((p) => p.playbookId === playbookId)) return true
   }
   return false
 }
@@ -52,9 +42,6 @@ function PlaybooksList({ connectionId }: { connectionId: string }) {
   const navigate = useNavigate()
   const paths = usePaths()
   const playbooksQuery = useAsync(() => listAdkPlaybooks(connectionId), [connectionId])
-  // Each action is its own permission (backend constants/permissions.ts); the agent gate
-  // refuses the same calls server-side, these only keep the buttons honest. Editing and
-  // publishing a draft both change an existing playbook, so both are playbook.update.
   const { can } = useAuth()
   const canCreate = can("playbook.create")
   const canUpdate = can("playbook.update")
@@ -84,7 +71,7 @@ function PlaybooksList({ connectionId }: { connectionId: string }) {
     setActionError(null)
     setBusyId(playbook.playbookId)
     try {
-      const session = await createAdkSession(connectionId, DATA_ANALYST, { playbook_id: playbook.playbookId })
+      const session = await createDataAnalystSession(connectionId, { playbookId: playbook.playbookId })
       navigate(paths.dataAnalyst(connectionId, session.sessionId))
     } catch {
       setActionError(`Couldn't start a chat from "${playbook.name}". Please try again.`)

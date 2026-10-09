@@ -1,6 +1,5 @@
 import type { CompanyPublished, Connection } from '@/types/metadataLakehouse'
 
-/** One published context as the Overview lists it: its live (newest) version. */
 export interface PublishedContextRow {
   connectionId: string
   connectionName: string
@@ -23,7 +22,6 @@ export interface LakehouseAttention {
   detail: string
 }
 
-/** Newest publish first. */
 export function publishedContexts(published: CompanyPublished | null): PublishedContextRow[] {
   if (!published) return []
   return published.items
@@ -50,7 +48,6 @@ export function publishedContexts(published: CompanyPublished | null): Published
     .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
 }
 
-/** Connections failing verification, or with a draft waiting to be published. */
 export function lakehouseAttention(connections: Connection[]): LakehouseAttention[] {
   const attention: LakehouseAttention[] = []
   for (const c of connections) {

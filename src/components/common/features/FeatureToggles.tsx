@@ -3,9 +3,6 @@ import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import type { FeatureDef, FeatureId } from '@/types/admin'
 
-// One switch per feature a company can have (backend constants/features.ts). Used when a
-// company is onboarded and on its detail page. A locked feature (Metadata Lakehouse) is shown
-// switched on and cannot be turned off - every company has it.
 export function FeatureToggles({
   features,
   enabled,

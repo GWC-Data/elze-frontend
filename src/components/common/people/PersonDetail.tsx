@@ -39,7 +39,6 @@ import type { AccessLevel, RoleName } from '@/types/auth'
 import type { AdminUser } from '@/types/admin'
 
 export interface PersonActions {
-  // customRoleId only applies to USER; undefined = leave it as it is.
   updateRole: (role: RoleName, customRoleId?: number | null) => Promise<unknown>
   activate: () => Promise<unknown>
   deactivate: () => Promise<unknown>

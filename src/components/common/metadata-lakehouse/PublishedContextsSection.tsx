@@ -1,7 +1,7 @@
 import { useDeferredValue, useState } from 'react'
 import type React from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { GitBranchPlus, History, Trash2, MoreHorizontal, Pencil, Plug, Search, Table2, User } from 'lucide-react'
+import { GitBranchPlus, History, Trash2, MoreHorizontal, Pencil, Plug, Search, Share2, Table2, User } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,26 +23,26 @@ import { serverPage } from '@/hooks/usePagination'
 import { formatDateTime, formatExact, formatRelativeTime } from '@/lib/format'
 import type { Connection, PublishedContextGroup, PublishedVersionEntry } from '@/types/metadataLakehouse'
 import { Hint } from '@/components/common/Hint'
-import { useAuth } from '@/context/authContext'
+import { accessAtLeast } from '@/lib/contextAccess'
 
 const PAGE_SIZE = 10
 const PREVIEW = 3
 
 export function PublishedContextsSection({
   connections,
-  canManage,
   builderPath,
   datasetsPath,
   publishedPath,
   onMcp,
+  onShare,
   search,
 }: {
   connections: Connection[]
-  canManage: boolean
   builderPath: (connectionId: string) => string
   datasetsPath: (connectionId: string) => string
   publishedPath: (connectionId: string, versionId: string) => string
   onMcp: (connection: Connection) => void
+  onShare: (connection: Connection) => void
   search: string
 }) {
   const [page, setPage] = useState(1)
@@ -90,11 +90,11 @@ export function PublishedContextsSection({
               key={`${group.connectionId}:${group.name}`}
               group={group}
               connection={byId.get(group.connectionId) ?? null}
-              canManage={canManage}
               builderPath={builderPath(group.connectionId)}
               datasetsPath={datasetsPath(group.connectionId)}
               versionPath={(versionId) => publishedPath(group.connectionId, versionId)}
               onMcp={onMcp}
+              onShare={onShare}
             />
           ))}
         </div>
@@ -108,27 +108,25 @@ export function PublishedContextsSection({
 function PublishedContextCard({
   group,
   connection,
-  canManage,
   builderPath,
   datasetsPath,
   versionPath,
   onMcp,
+  onShare,
 }: {
   group: PublishedContextGroup
   connection: Connection | null
-  canManage: boolean
   builderPath: string
   datasetsPath: string
   versionPath: (versionId: string) => string
   onMcp: (connection: Connection) => void
+  onShare: (connection: Connection) => void
 }) {
   const [showAll, setShowAll] = useState(false)
   const [deleting, setDeleting] = useState<PublishedVersionEntry | null>(null)
-  // canManage (context.update) continues a draft; starting a version and deleting one are
-  // their own permissions.
-  const { can } = useAuth()
-  const canCreate = can('context.create')
-  const canDelete = can('context.delete')
+  const access = group.access ?? connection?.access ?? null
+  const canEdit = accessAtLeast(access, 'edit')
+  const canDelete = accessAtLeast(access, 'full')
   const remove = useDeleteVersion()
   const create = useCreateVersion(group.connectionId)
   const navigate = useNavigate()
@@ -212,9 +210,15 @@ function PublishedContextCard({
                 <Plug aria-hidden />
                 MCP connection details
               </DropdownMenuItem>
+              {access?.canShare ? (
+                <DropdownMenuItem onSelect={() => onShare(connection)}>
+                  <Share2 aria-hidden />
+                  Share…
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuSeparator />
               {editing ? (
-                canManage ? (
+                canEdit ? (
                   <DropdownMenuItem asChild>
                     <Link to={builderPath}>
                       <Pencil aria-hidden />
@@ -222,7 +226,7 @@ function PublishedContextCard({
                     </Link>
                   </DropdownMenuItem>
                 ) : null
-              ) : canCreate ? (
+              ) : canEdit ? (
                 <DropdownMenuItem disabled={create.isPending} onSelect={() => void startNewVersion()}>
                   <GitBranchPlus aria-hidden />
                   {create.isPending ? 'Creating…' : 'Create new version'}

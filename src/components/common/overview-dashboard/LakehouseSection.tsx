@@ -5,7 +5,6 @@ import { formatDateTime, formatRelativeTime } from '@/lib/format'
 import type { PublishedContextRow } from '@/lib/lakehouseStats'
 import { PanelEmpty, PanelLoading } from './Panels'
 
-/** The Overview's Lakehouse card: which company published which context, and its details. Nothing else. */
 export function LakehouseSection({
   contexts,
   loading,

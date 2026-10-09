@@ -12,7 +12,7 @@ export interface ContextObject {
 }
 
 export interface ContextObjects {
-  resolvedSessionId: string | null
+  resolvedVersionId: string | null
   count: number
   counts: Record<string, number>
   matched: number
@@ -58,13 +58,15 @@ export interface TableFacts {
   table: Fact
   columns: Fact[]
   related: Fact[]
+  needsReview?: number
 }
 
 export interface FactsByTable {
-  resolvedSessionId: string | null
+  resolvedVersionId: string | null
   count: number
   counts: Record<string, number>
   needsReview: number
+  reviewCounts?: { tables: number; columns: number }
   tableCount: number
   matched: number
   tables: TableFacts[]
@@ -73,6 +75,7 @@ export interface FactsByTable {
 
 export interface FactsByTableQuery {
   search?: string
+  review?: 'pending'
   page: number
   pageSize: number
 }

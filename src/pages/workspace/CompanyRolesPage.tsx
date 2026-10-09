@@ -31,14 +31,6 @@ import {
 } from '@/components/ui/dialog'
 import type { BuiltInCompanyRole, CompanyRole, RolePermissionOption } from '@/types/admin'
 
-// A company's roles, Domo-style: every member holds one role, and everyone holding it gets
-// exactly its permissions. The built-in Member role starts from the platform owner's defaults
-// and can be tailored for this company (and reset); Company admin is view-only, so an admin can
-// never trim their own role into a lock-out. The company's own roles are created here too.
-//
-// What a role can hold is limited by the features the platform owner enabled for the company,
-// and a role change applies to its members on their next request - no sign-out needed.
-
 export default function CompanyRolesPage() {
   const { can, user } = useAuth()
   const roles = useAsync(() => listCompanyRoles(), [])
@@ -286,8 +278,6 @@ export default function CompanyRolesPage() {
       />
 
       <Dialog open={viewing !== null} onOpenChange={(open) => !open && setViewing(null)}>
-        {/* Capped to the viewport: the grid is taller than most screens, so it scrolls
-            inside the dialog instead of pushing the dialog off the top and bottom. */}
         <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-3xl">
           <DialogHeader className="shrink-0">
             <DialogTitle>{viewing?.name}</DialogTitle>
@@ -319,8 +309,6 @@ export default function CompanyRolesPage() {
   )
 }
 
-// Edits a custom role, or - with `builtIn` - this company's version of a built-in role, which
-// has no name or description of its own.
 function RoleEditorDialog({
   role,
   builtIn,

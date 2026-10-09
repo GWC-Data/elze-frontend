@@ -49,8 +49,6 @@ export function CompanyOnboardingDialog({
   const [adminEmail, setAdminEmail] = useState('')
   const [adminDisplayName, setAdminDisplayName] = useState('')
 
-  // Toggleable features start OFF: what a company gets is a decision, not a default.
-  // Metadata Lakehouse is locked on and never sent.
   const [catalogue, setCatalogue] = useState<FeatureDef[] | null>(null)
   const [catalogueError, setCatalogueError] = useState<string | null>(null)
   const [features, setFeatures] = useState<Set<FeatureId>>(new Set())

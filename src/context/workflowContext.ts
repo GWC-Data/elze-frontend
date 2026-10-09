@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { WorkflowStepId } from '@/types/metadataLakehouse'
+import type { ContextAccess, WorkflowStepId } from '@/types/metadataLakehouse'
 
 export const WORKFLOW_STEPS: ReadonlyArray<{
   id: WorkflowStepId
@@ -28,6 +28,7 @@ export interface WorkflowState {
 
   versionId: string | null
   readOnly: boolean
+  access: ContextAccess | null
 
   step: WorkflowStepId
   goToStep: (id: WorkflowStepId) => void

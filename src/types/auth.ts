@@ -8,16 +8,13 @@ export interface AuthUser {
   email: string
   displayName: string | null
   role: RoleName
-  // A company's own role, when the member holds one (its permissions replace USER's).
   customRoleId?: number | null
   customRoleName?: string | null
   status: UserStatus
   mustChangePassword: boolean
   lastLoginAt: string | null
   createdAt: string | null
-  // Already limited to the company's enabled features by the server.
   permissions: string[]
-  // The company's enabled features (types/admin.ts FeatureId), Metadata Lakehouse included.
   features?: string[]
 }
 

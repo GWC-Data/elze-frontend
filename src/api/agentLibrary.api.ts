@@ -4,27 +4,6 @@ import { endpoints } from '@/api/endpoints'
 import { AGENT_LIBRARY_API_URL, AGENT_LIBRARY_USES_BACKEND } from '@/constants/env'
 import type { AgentSchedule, LibraryAgent, LibraryAgentInput } from '@/types/agentLibrary'
 
-// One interface, two adapters, chosen once from the environment:
-//
-// - VITE_AGENT_LIBRARY_API_URL blank → `localAdapter`: agents live in this browser's
-//   localStorage. It exists so the screens are usable before the service does; nothing is
-//   shared across browsers and no schedule ever fires.
-// - set → `httpAdapter`: the REST contract below, against that origin.
-//
-// Callers only ever see `agentLibraryApi`, so pointing the env at the real backend is the
-// whole switch.
-//
-// REST contract the backend must implement (JSON bodies are the types in
-// types/agentLibrary.ts):
-//   GET    /agents                  → LibraryAgent[]
-//   POST   /agents                  LibraryAgentInput → LibraryAgent
-//   GET    /agents/:id              → LibraryAgent
-//   PUT    /agents/:id              LibraryAgentInput → LibraryAgent
-//   DELETE /agents/:id              → 204
-//   PUT    /agents/:id/schedule     AgentSchedule → LibraryAgent
-//   DELETE /agents/:id/schedule     → LibraryAgent (schedule: null)
-// Errors: any non-2xx; `{ detail }` or `{ error: { message } }` is shown if present.
-
 export interface AgentLibraryApi {
   list(): Promise<LibraryAgent[]>
   get(id: string): Promise<LibraryAgent>
@@ -45,10 +24,6 @@ export class AgentLibraryError extends Error {
   }
 }
 
-// ------------------------------------------------------------------ http adapter
-
-// Bare axios with no credentials: this app's session cookies belong to its own backend
-// and must not be sent to another origin. Configure that service's auth here when it has one.
 export const libraryClient = axios.create({ baseURL: AGENT_LIBRARY_API_URL })
 
 libraryClient.interceptors.response.use(
@@ -84,8 +59,6 @@ const httpAdapter: AgentLibraryApi = {
   clearSchedule: async (id) => (await libraryClient.delete<LibraryAgent>(paths.schedule(id))).data,
 }
 
-// ----------------------------------------------------------------- local adapter
-
 const STORAGE_KEY = 'elze.agentLibrary.agents'
 
 function readAll(): LibraryAgent[] {
@@ -93,7 +66,6 @@ function readAll(): LibraryAgent[] {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return []
     const parsed: unknown = JSON.parse(raw)
-    // Unreadable storage is an error, not "no agents" — the two must stay distinguishable.
     if (!Array.isArray(parsed)) throw new Error('stored agents are not a list')
     return parsed as LibraryAgent[]
   } catch (error) {

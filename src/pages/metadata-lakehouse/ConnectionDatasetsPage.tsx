@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Loader2, Search } from 'lucide-react'
 import { errorMessage } from '@/api/client'
-import { useAuth } from '@/context/authContext'
 import { usePaths } from '@/hooks/usePaths'
 import { useAsync } from '@/hooks/useAsync'
 import { Page, PageHeader, Section } from '@/components/common/Page'
@@ -19,17 +18,17 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { accessAtLeast } from '@/lib/contextAccess'
 import { getConnection } from '@/api/connection.api'
 import { fetchDatasets, saveSelection } from '@/api/dataset.api'
 import type { WarehouseDataset } from '@/types/metadataLakehouse'
 
 export default function ConnectionDatasetsPage() {
   const { id = '' } = useParams()
-  const { can } = useAuth()
   const paths = usePaths()
-  const canManage = can('context.update')
 
   const connection = useAsync(() => getConnection(id), [id])
+  const canManage = accessAtLeast(connection.data?.access, 'edit')
   const warehouse = useAsync(() => fetchDatasets(id), [id])
 
   const [edited, setEdited] = useState<Set<string> | null>(null)

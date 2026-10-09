@@ -1,6 +1,6 @@
-import { Suspense, lazy, useEffect } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Eye, GitBranchPlus, Loader2, Pencil } from 'lucide-react'
+import { ArrowLeft, Eye, GitBranchPlus, Loader2, Pencil, Share2 } from 'lucide-react'
 import { useAuth } from '@/context/authContext'
 import { notify } from '@/lib/notify'
 import { Button } from '@/components/ui/button'
@@ -13,8 +13,10 @@ import { Stepper } from '@/components/common/metadata-lakehouse/Stepper'
 import { CardSkeleton, TileSkeleton } from '@/components/common/metadata-lakehouse/DataStates'
 import { Skeleton } from '@/components/ui/skeleton'
 import { VersionBadge } from '@/components/common/metadata-lakehouse/VersionBadge'
+import { ContextShareDialog } from '@/components/common/metadata-lakehouse/ContextShareDialog'
+import { accessAtLeast } from '@/lib/contextAccess'
 import { formatRelativeTime } from '@/lib/format'
-import { useContextVersions, useCreateVersion, useTrackStep } from '@/hooks/useMetadataLakehouse'
+import { useConnection, useContextVersions, useCreateVersion, useTrackStep } from '@/hooks/useMetadataLakehouse'
 import type { WorkflowStepId } from '@/types/metadataLakehouse'
 
 const ConnectStep = lazy(() =>
@@ -54,7 +56,7 @@ export default function MetadataLakehouseBuilderPage() {
         key={`${initialConnectionId ?? ''}:${versionId ?? 'draft'}`}
         connectionId={initialConnectionId}
         versionId={versionId}
-        canWrite={can('context.update')}
+        canCreate={can('context.create')}
       />
     </ContextQueryProvider>
   )
@@ -63,11 +65,11 @@ export default function MetadataLakehouseBuilderPage() {
 function BuilderRoot({
   connectionId,
   versionId,
-  canWrite,
+  canCreate,
 }: {
   connectionId: string | null
   versionId: string | null
-  canWrite: boolean
+  canCreate: boolean
 }) {
   const resuming = Boolean(connectionId && !versionId)
   const versions = useContextVersions(connectionId, resuming)
@@ -93,7 +95,7 @@ function BuilderRoot({
     <WorkflowProvider
       initialConnectionId={connectionId}
       versionId={versionId}
-      canWrite={canWrite}
+      canCreate={canCreate}
       initialStep={initialStep}
       initialFurthest={initialFurthest}
     >
@@ -103,9 +105,11 @@ function BuilderRoot({
 }
 
 function BuilderShell() {
-  const { step, connectionId, versionId, readOnly } = useWorkflow()
+  const { step, connectionId, versionId, readOnly, access } = useWorkflow()
   const paths = usePaths()
   const { mutate: trackStep } = useTrackStep(connectionId)
+  const connection = useConnection(connectionId)
+  const [sharing, setSharing] = useState(false)
 
   useEffect(() => {
     if (connectionId && !readOnly) trackStep(step)
@@ -127,13 +131,28 @@ function BuilderShell() {
               <VersionLine connectionId={connectionId} />
             )}
           </div>
-          <Button asChild variant="outline" size="sm">
-            <Link to={paths.metadataLakehouse}>
-              <ArrowLeft className="size-4" aria-hidden />
-              All connections
-            </Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {connectionId && access?.canShare ? (
+              <Button variant="outline" size="sm" onClick={() => setSharing(true)}>
+                <Share2 className="size-4" aria-hidden />
+                Share
+              </Button>
+            ) : null}
+            <Button asChild variant="outline" size="sm">
+              <Link to={paths.metadataLakehouse}>
+                <ArrowLeft className="size-4" aria-hidden />
+                All connections
+              </Link>
+            </Button>
+          </div>
         </header>
+
+        <ContextShareDialog
+          connectionId={connectionId}
+          name={connection.data?.name ?? 'this context'}
+          open={sharing}
+          onOpenChange={setSharing}
+        />
 
         <div className="rounded-xl border bg-card">
           <div className="border-b px-6 py-3.5">
@@ -159,7 +178,7 @@ function BuilderShell() {
 }
 
 function ViewingLine({ connectionId, versionId }: { connectionId: string; versionId: string }) {
-  const { can } = useAuth()
+  const { access } = useWorkflow()
   const navigate = useNavigate()
   const paths = usePaths()
   const versions = useContextVersions(connectionId)
@@ -200,7 +219,7 @@ function ViewingLine({ connectionId, versionId }: { connectionId: string; versio
       ) : versions.isPending ? null : (
         <span>This published version could not be found.</span>
       )}
-      {can('context.update') ? (
+      {accessAtLeast(access, 'edit') ? (
         draft ? (
           <Button asChild size="sm" variant="outline" className="h-7">
             <Link to={paths.metadataLakehouseBuilder(connectionId)}>

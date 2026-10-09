@@ -20,9 +20,6 @@ import { Hint } from "@/components/common/Hint"
 
 export type { PublishedContextOption }
 
-// Every published version of every context the company has - the same list as the Metadata
-// Lakehouse "Published" section (GET /api/context/published-contexts) - grouped per context,
-// newest first, the live one marked. "No context" is the default. Needs context.read.
 const NONE = "__none__"
 
 const date = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" })
@@ -36,7 +33,6 @@ export function ContextPicker({
   value: PublishedContextOption | null
   onChange: (next: PublishedContextOption | null) => void
   disabled?: boolean
-  // Shown as the tooltip while disabled, to say why.
   disabledHint?: string
 }) {
   const { data, error, loading, reload } = useAsync(listPublishedContexts)

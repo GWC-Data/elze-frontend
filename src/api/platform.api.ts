@@ -65,7 +65,6 @@ export function fetchCompanyFeatures(companyId: number): Promise<CompanyFeatures
   return get<CompanyFeatures>(endpoints.platform.companyFeatures(companyId))
 }
 
-// The whole set of switched-on features; anything left out is switched off.
 export function saveCompanyFeatures(companyId: number, features: FeatureId[]): Promise<CompanyFeatures> {
   return put<CompanyFeatures>(endpoints.platform.companyFeatures(companyId), { features })
 }

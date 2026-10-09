@@ -204,8 +204,6 @@ export function DataTable<T>({
       ) : loading ? (
         <TableSkeleton columns={Math.min(columns.length, 5)} />
       ) : isEmpty || (noMatch && !query) ? (
-        // Narrowed by a caller's filters rather than the search box: the caller's `empty`
-        // explains it, since "Nothing matches “”" would not.
         <EmptyState title={empty.title} body={empty.body} action={empty.action} />
       ) : noMatch ? (
         <NoResultsState query={query} onClear={clearSearch} />

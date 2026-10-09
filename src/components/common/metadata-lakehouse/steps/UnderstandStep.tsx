@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { ChevronRight, Loader2, MessageCircle, Sparkles } from 'lucide-react'
+import { ChevronRight, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { notify } from '@/lib/notify'
 import { StepFrame } from '@/components/common/metadata-lakehouse/StepFrame'
@@ -16,6 +16,7 @@ import {
   useConnection,
   useExtraction,
   useFactsByTable,
+  useRefreshFacts,
   useRunExtraction,
   useUnderstanding,
 } from '@/hooks/useMetadataLakehouse'
@@ -27,20 +28,26 @@ import { AgentReport } from '@/components/common/metadata-lakehouse/steps/AgentR
 import { GlossaryView } from '@/components/common/metadata-lakehouse/steps/GlossaryView'
 import { TableExplorer } from '@/components/common/metadata-lakehouse/steps/TableExplorer'
 import { UnderstandChatWidget } from '@/components/common/metadata-lakehouse/steps/UnderstandChatWidget'
+import type { DatasetNames, MentionControls, MentionRow } from '@/components/common/metadata-lakehouse/steps/mentions'
 
 export function UnderstandStep() {
   const { connectionId, goToStep, readOnly } = useWorkflow()
-  const [chatOpen, setChatOpen] = useState(false)
-  const [chatTable, setChatTable] = useState<string | null>(null)
-  const openChatForTable = (tableName: string) => {
-    setChatTable(tableName)
-    setChatOpen(true)
-  }
   const connection = useConnection(connectionId)
   const extraction = useExtraction(connectionId)
   const facts = useFactsByTable(connectionId)
   const glossary = useUnderstanding(connectionId)
   const rerun = useRunExtraction(connectionId)
+  const refreshFacts = useRefreshFacts(connectionId)
+
+  const [mentions, setMentions] = useState<MentionRow[]>([])
+  const [rowsVersion, setRowsVersion] = useState<string | null>(null)
+  const datasetNames = useMemo<DatasetNames>(
+    () =>
+      new Map(
+        (connection.data?.selectedDatasets ?? []).map((d) => [String(d.id).toLowerCase(), d.name || String(d.id)])
+      ),
+    [connection.data]
+  )
 
   if (!connectionId) {
     return (
@@ -67,6 +74,39 @@ export function UnderstandStep() {
     result || (facts.data && facts.data.count > 0) || (glossary.data && glossary.data.stats.termsGenerated > 0)
   )
 
+  const chatVersionId = !readOnly && facts.data && facts.data.count > 0 ? facts.data.resolvedVersionId : null
+  if (chatVersionId !== rowsVersion) {
+    setRowsVersion(chatVersionId)
+    setMentions([])
+  }
+
+  const addMention = (row: MentionRow) =>
+    setMentions((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]))
+
+  const mention: MentionControls | undefined = chatVersionId
+    ? {
+        mentions,
+        datasetNames,
+        onToggle: (row) =>
+          setMentions((prev) => (prev.some((m) => m.id === row.id) ? prev.filter((m) => m.id !== row.id) : [...prev, row])),
+      }
+    : undefined
+
+  const chat =
+    chatVersionId && mention ? (
+      <UnderstandChatWidget
+        key={chatVersionId}
+        connectionId={connectionId}
+        versionId={chatVersionId}
+        mentions={mentions}
+        onAddMention={addMention}
+        onRemoveMention={(id) => setMentions((prev) => prev.filter((m) => m.id !== id))}
+        datasetNames={datasetNames}
+        onEdited={refreshFacts}
+        className="h-[560px] xl:h-[calc(100dvh-3rem)] xl:max-h-[820px]"
+      />
+    ) : null
+
   const body = extraction.isPending || (glossary.isPending && !result) ? (
     <UnderstandSkeleton />
   ) : extraction.isError ? (
@@ -82,7 +122,8 @@ export function UnderstandStep() {
       facts={facts.data ?? null}
       glossary={glossary.data ?? null}
       glossaryLoading={glossary.isPending}
-      onAskAboutTable={readOnly ? undefined : openChatForTable}
+      mention={mention}
+      chat={chat}
     />
   ) : (
     <EmptyState
@@ -108,70 +149,28 @@ export function UnderstandStep() {
   )
 
   return (
-    <>
-      <StepFrame
-        title="Understand your data"
-        description={
-          readOnly
-            ? 'What the extraction agent found, as it was published. Nothing is re-run.'
-            : 'What the extraction agent found in the datasets you selected.'
-        }
-        actions={
-          readOnly ? undefined : <Button
-            variant="outline"
-            size="sm"
-            onClick={run}
-            disabled={running || datasetIds.length === 0}
-          >
-            {running ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden />
-            ) : (
-              <Sparkles className="size-4" aria-hidden />
-            )}
-            {result ? 'Run again' : 'Run extraction'}
-          </Button>
-        }
-        refreshing={!running && (glossary.isFetching || extraction.isFetching) && hasContent}
-        headerExtra={
-          readOnly ? undefined : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setChatTable(null)
-                setChatOpen((v) => !v)
-              }}
-            >
-              <MessageCircle className="size-4" aria-hidden />
-              {chatOpen ? 'Close chat' : 'Ask about this data'}
-            </Button>
-          )
-        }
-      >
-        {running ? (
-          <div className="relative min-h-[480px]">
-            {hasContent ? body : <UnderstandSkeleton />}
-            <BusyOverlay
-              title="Analysing your data with AI"
-              detail={`Reading ${datasetIds.length} dataset${datasetIds.length === 1 ? '' : 's'} and generating the business glossary, metrics and relationships. This can take a few minutes.`}
-            />
-          </div>
-        ) : (
-          body
-        )}
-      </StepFrame>
-      {!readOnly && (
-        <UnderstandChatWidget
-          // A re-run records a new extraction session: start the panel over on it.
-          key={result?.sessionId || 'none'}
-          connectionId={connectionId}
-          extractionSessionId={result?.sessionId || null}
-          open={chatOpen}
-          onOpenChange={setChatOpen}
-          focusTable={chatTable}
-        />
+    <StepFrame
+      title="Understand your data"
+      description={
+        readOnly
+          ? 'What the extraction agent found, as it was published. Nothing is re-run.'
+          : 'What the extraction agent found in the datasets you selected.'
+      }
+      refreshing={!running && (glossary.isFetching || extraction.isFetching) && hasContent}
+      scrollBody={!chat}
+    >
+      {running ? (
+        <div className="relative min-h-[480px]">
+          {hasContent ? body : <UnderstandSkeleton />}
+          <BusyOverlay
+            title="Analysing your data with AI"
+            detail={`Reading ${datasetIds.length} dataset${datasetIds.length === 1 ? '' : 's'} and generating the business glossary, metrics and relationships. This can take a few minutes.`}
+          />
+        </div>
+      ) : (
+        body
       )}
-    </>
+    </StepFrame>
   )
 }
 
@@ -191,14 +190,16 @@ function ExtractionView({
   facts,
   glossary,
   glossaryLoading,
-  onAskAboutTable,
+  mention,
+  chat,
 }: {
   connectionId: string
   result: ExtractionResult | null
   facts: FactsByTable | null
   glossary: Understanding | null
   glossaryLoading: boolean
-  onAskAboutTable?: (tableName: string) => void
+  mention?: MentionControls
+  chat: ReactNode
 }) {
   const terms = glossary?.stats.termsGenerated ?? 0
   return (
@@ -213,7 +214,16 @@ function ExtractionView({
       ) : null}
 
       {facts && facts.count > 0 ? (
-        <TableExplorer connectionId={connectionId} onAskAboutTable={onAskAboutTable} />
+        chat ? (
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start">
+            <div className="min-w-0">
+              <TableExplorer connectionId={connectionId} mention={mention} narrow />
+            </div>
+            <aside className="min-w-0 xl:sticky xl:top-6">{chat}</aside>
+          </div>
+        ) : (
+          <TableExplorer connectionId={connectionId} />
+        )
       ) : null}
 
       {glossary && terms > 0 ? (

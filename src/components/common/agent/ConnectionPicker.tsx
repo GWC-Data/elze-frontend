@@ -10,15 +10,6 @@ import { Badge } from "@/components/ui/workbench/badge"
 import { EmptyState, ErrorState, InlineLoading } from "@/components/common/States"
 import type { Connection } from "@/types/metadataLakehouse"
 
-// A required full-page gate for any ADK-backed feature: workspace_id there is a
-// specific connection's id, so a chat/playbooks page has nothing to talk to
-// until one is chosen. Switching connections mid-conversation would be
-// meaningless once a session is bound to the old one, so this is a fresh
-// navigation (onSelect), not a header dropdown that could swap silently.
-//
-// Wraps itself in ContextQueryProvider: useConnections() is a react-query hook,
-// and the app only sets up a QueryClient inside the metadata-lakehouse module's
-// own subtree — this component is used from agent pages outside that subtree.
 export function ConnectionPicker(props: { onSelect: (connectionId: string) => void }) {
   return (
     <ContextQueryProvider>
@@ -32,8 +23,6 @@ function ConnectionPickerBody({ onSelect }: { onSelect: (connectionId: string) =
   const list = connections.data ?? []
   const onlyConnectionId = list.length === 1 && list[0].status === 'connected' ? list[0].id : null
 
-  // Skip the gate when it isn't actually a choice: exactly one working
-  // connection means there's nothing to pick between.
   const autoSelectedRef = useRef(false)
   useEffect(() => {
     if (autoSelectedRef.current || !onlyConnectionId) return
@@ -41,9 +30,6 @@ function ConnectionPickerBody({ onSelect }: { onSelect: (connectionId: string) =
     onSelect(onlyConnectionId)
   }, [onlyConnectionId, onSelect])
 
-  // Until we know whether there is a choice to make - still loading, or about to skip straight
-  // through with the only connection - show a neutral loader, not the "Choose a connection"
-  // heading: otherwise that heading flashes for a moment before the chat or playbooks appear.
   if (connections.isPending || onlyConnectionId) {
     return (
       <div className="flex h-full min-h-[40vh] items-center justify-center p-6">

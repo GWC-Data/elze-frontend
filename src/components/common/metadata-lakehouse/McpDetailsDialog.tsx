@@ -75,10 +75,10 @@ function DetailsBody({ connection }: { connection: Connection }) {
             <Field label="Transport" value={MCP_CONFIG.transport} />
             <Field label="Server name" value={serverName} copy />
             <Field
-              label="Workspace ID"
+              label="Context ID"
               value={connection.id}
               copy
-              hint="Send as workspace_id on every tool call."
+              hint="Send as context_id on every tool call."
             />
           </dl>
         </section>
@@ -127,7 +127,7 @@ function DetailsBody({ connection }: { connection: Connection }) {
             <li>Add this entry to your MCP client’s server list.</li>
             <li>Replace the token placeholder with the token from your platform administrator.</li>
             <li>
-              Pass <code className="font-mono text-foreground">"workspace_id": "{connection.id}"</code>{' '}
+              Pass <code className="font-mono text-foreground">"context_id": "{connection.id}"</code>{' '}
               on every tool call.
             </li>
           </ol>

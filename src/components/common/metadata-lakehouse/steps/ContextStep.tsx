@@ -17,9 +17,6 @@ export function ContextStep() {
   const [description, setDescription] = useState('')
   const [loadedFor, setLoadedFor] = useState<string | null>(null)
 
-  // Seed the form once per connection, as soon as its profile query resolves
-  // (data is null when none is saved yet) — adjusted during render rather than
-  // in an effect, so it never clobbers what the user is mid-typing afterwards.
   if (profile.isSuccess && loadedFor !== connectionId) {
     setLoadedFor(connectionId)
     setName(profile.data?.name ?? '')

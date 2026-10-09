@@ -16,7 +16,6 @@ function homeFor(user: AuthUser): string {
   return shellForRole(user.role) === 'platform' ? '/platform' : '/workspace'
 }
 
-// `permission` may be a list: holding any one of them is enough.
 export function RequirePermission({
   permission,
   children,
@@ -30,8 +29,6 @@ export function RequirePermission({
 
   if (anyOf.some((p) => can(p))) return children
 
-  // The session only lists the features this account can use, so a missing feature may be the
-  // company's or the role's - and the page must not name one either way.
   const feature = featureOfPermission(anyOf[0])
   const detail =
     feature && !hasFeature(feature)
@@ -65,8 +62,6 @@ export function LoginRoute({ children }: { children: ReactElement }) {
   return children
 }
 
-// The Metadata Lakehouse screens used to live under `/context`. Old bookmarks and shared links
-// are forwarded to the new address, keeping the rest of the path and the query string.
 export function LegacyContextRedirect() {
   const { pathname, search, hash } = useLocation()
   const to = pathname.replace(/\/context(?=\/|$)/, '/metadata-lakehouse')

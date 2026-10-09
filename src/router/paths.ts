@@ -19,9 +19,7 @@ export interface AppPaths {
   playbooks(connectionId?: string): string
   playbookBuilder(connectionId?: string, sessionId?: string): string
   readonly agentLibrary: string
-  // The agent's chat; a session id opens that conversation.
   libraryAgent(agentId: string, sessionId?: string): string
-  // No id = the create page.
   libraryAgentEdit(agentId?: string): string
 
   readonly users: string

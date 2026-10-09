@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useAsync } from '@/hooks/useAsync'
 import type { ListQuery, Paged } from '@/types/admin'
 
-/** P is the page type, for endpoints whose page carries more than items and total. */
 export function useServerList<T, F extends object = Record<string, never>, P extends Paged<T> = Paged<T>>(
   fetchPage: (query: ListQuery & F) => Promise<P>,
   initial: ListQuery,

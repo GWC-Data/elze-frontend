@@ -29,7 +29,7 @@ retired on 2026-09-30, together with its Redux store and its hardcoded user id.
 ## Access
 
 - The backend decides: nginx asks `GET /api/gate/agents` before every `/svc/adk` call
-  (`backend/src/services/agentGate.service.ts`). The company must have the feature and the
+  (`backend/src/services/agentGateService.ts`). The company must have the feature and the
   role the permission; the workspace must be one of the company's connections.
 - Routes and buttons mirror it: `analyst.use` or `playbook.run` (Data analyst),
   `playbook.read` (Playbooks), `playbook.create` or `playbook.update` (builder),

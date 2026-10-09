@@ -28,19 +28,14 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import type { AgentSchedule, LibraryAgent } from '@/types/agentLibrary'
 
-// The Agent Library's field style: soft fill, rounded, lifts to the page colour on focus.
 export const boxField =
   'rounded-lg bg-muted/40 px-3 shadow-xs transition-colors hover:border-foreground/20 focus-visible:bg-background'
 
-// The schedule trigger for one agent. Mount with `key={agent?.id}` so each agent starts
-// from its own saved schedule. A new schedule's recipient defaults to the signed-in
-// account's email.
 export function ScheduleDialog({
   agent,
   onOpenChange,
   onSaved,
 }: {
-  // null = closed
   agent: LibraryAgent | null
   onOpenChange: (open: boolean) => void
   onSaved: (agent: LibraryAgent) => void

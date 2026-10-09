@@ -47,11 +47,9 @@ function greeting(): string {
   return 'Good evening'
 }
 
-/** Connections and published contexts, scoped by the server: every company for the platform, else the caller's. */
 function useLakehouse(enabled: boolean) {
   const connections = useAsync(() => (enabled ? listConnections() : Promise.resolve([])), [enabled])
   const published = useAsync(
-    // 50 is the server's page limit for published contexts.
     () => (enabled ? listCompanyPublished({ page: 1, pageSize: 50 }) : Promise.resolve(null)),
     [enabled]
   )
@@ -401,7 +399,6 @@ function DashboardsPanel({ dashboards }: { dashboards: { id: string; title?: str
   )
 }
 
-/** Quick actions as a list, for layouts where they share a row with another panel. */
 function QuickActionsPanel({ actions }: { actions: QuickAction[] }) {
   return (
     <Panel title="Quick actions">

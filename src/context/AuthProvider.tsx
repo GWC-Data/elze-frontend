@@ -68,9 +68,6 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [applyProfile, clearSession])
 
-  // Features and role permissions change server-side at any time (the platform owner's toggles,
-  // a company admin editing a role) and apply on the next request. Re-reading the session when
-  // the tab comes back into focus lets the sidebar follow without a sign-out.
   useEffect(() => {
     const onFocus = () => {
       if (document.visibilityState !== 'visible') return

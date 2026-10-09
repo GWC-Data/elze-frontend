@@ -4,16 +4,6 @@ import { FEATURE_LABELS } from '@/constants/features'
 import { cn } from '@/lib/utils'
 import type { FeatureId, RolePermissionOption } from '@/types/admin'
 
-// The Domo-style role editor: one row per thing, one column per action. Rows are built from
-// the permission ids (`<thing>.<action>`), so a permission added to the backend catalogue
-// appears here with no change - in "More" if its action is not one of the four.
-//
-// Two rules are applied as you tick, and again by the server:
-//   - Create / Edit / Delete / More imply View of the same thing;
-//   - unticking View unticks everything else in that row.
-// Rows of features the company does not have are shown greyed out, so the admin can see what
-// exists; permissions that stay with the company admin role are not shown at all.
-
 const THINGS: Record<string, string> = {
   context: 'Metadata Lakehouse',
   analyst: 'Data analyst',
@@ -137,7 +127,6 @@ export function PermissionGrid({
   const rows = buildRows(options)
   const set = (id: string, on: boolean) => onChange?.(toggleWithImplications(selected, options, id, on))
 
-  // Grouped by feature, core last, so the grid reads like the sidebar.
   const order: Array<FeatureId | null> = ['metadata_lakehouse', 'data_analyst', 'agents', 'dashboards', null]
 
   return (

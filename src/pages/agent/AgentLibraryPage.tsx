@@ -17,10 +17,6 @@ import type { LibraryAgent } from '@/types/agentLibrary'
 
 const updated = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' })
 
-// The Agent Library: user-defined agents with a role, instructions and published contexts
-// as knowledge, each optionally on a schedule. A card opens the agent's chat
-// (LibraryAgentChatPage); creating and editing happen on LibraryAgentPage; Schedule is a popup. Storage is whatever agentLibraryApi resolves to — browser
-// storage until VITE_AGENT_LIBRARY_API_URL points at the agent backend.
 export default function AgentLibraryPage() {
   const paths = usePaths()
   const { can, user } = useAuth()
@@ -98,7 +94,6 @@ export default function AgentLibraryPage() {
                   )}
                 </div>
 
-                {/* The whole card opens the agent; the Schedule link sits above it. */}
                 <Link
                   to={paths.libraryAgent(agent.id)}
                   className="mt-3 font-semibold text-card-foreground after:absolute after:inset-0 after:rounded-xl"

@@ -10,6 +10,7 @@ import * as publishApi from '@/api/publish.api'
 import * as extractionApi from '@/api/extraction.api'
 import * as contextObjectsApi from '@/api/contextObjects.api'
 import * as versionsApi from '@/api/version.api'
+import * as accessApi from '@/api/contextAccess.api'
 import { contextKeys } from '@/lib/queryKeys'
 import { useViewVersionId } from '@/context/workflowContext'
 import type {
@@ -17,7 +18,12 @@ import type {
   CompanyPublishedQuery,
   Connection,
   Connector,
+  ContextAccess,
+  ContextAccessLevel,
   ContextProfile,
+  ContextSharePerson,
+  ContextSharing,
+  GeneralAccess,
   ContextVersionState,
   Understanding,
   WorkflowStepId,
@@ -133,6 +139,15 @@ export function useConnection(connectionId: string | null) {
   })
 }
 
+export function useConnectionAccess(connectionId: string | null): ContextAccess | null {
+  const connection = useQuery<Connection>({
+    queryKey: contextKeys.connection(connectionId ?? ''),
+    queryFn: () => connectionsApi.getConnection(connectionId!),
+    enabled: Boolean(connectionId),
+  })
+  return connection.data?.access ?? null
+}
+
 export function useContextProfile(connectionId: string | null) {
   return useQuery<ContextProfile | null>({
     queryKey: contextKeys.contextProfile(connectionId ?? ''),
@@ -168,6 +183,7 @@ export function useCreateConnection() {
     mutationFn: (body) => connectionsApi.createConnection(body),
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: contextKeys.connections() })
+      qc.setQueryData<Connection>(contextKeys.connection(created.connection.id), created.connection)
       qc.setQueryData<DatasetListing>(
         contextKeys.datasets(created.connection.id, created.limit),
         {
@@ -257,17 +273,17 @@ export function useTableProfile(connectionId: string | null, tableId: string | n
 
 export function useExtraction(connectionId: string | null, enabled = true) {
   const version = useViewVersionId()
-  const versions = useContextVersions(connectionId, Boolean(version))
-  const sessionId = version
-    ? (versions.data?.versions.find((v) => v.id === version)?.sessionId ?? null)
-    : null
+  const versions = useContextVersions(connectionId)
+  const target = version ? versions.data?.versions.find((v) => v.id === version) : versions.data?.draft
+  const sessionId = target?.sessionId ?? null
   return useQuery<ExtractionResult | null>({
-    queryKey: [...contextKeys.extraction(connectionId ?? ''), ...scoped(version)],
+    queryKey: [...contextKeys.extraction(connectionId ?? ''), ...scoped(version), sessionId],
     queryFn: async () => {
+      if (!sessionId) return null
       const stored = await versionsApi.fetchStoredExtraction(connectionId!, version)
-      if (stored && stored.text) {
+      if (stored && stored.text && stored.sessionId === sessionId) {
         return {
-          sessionId: stored.sessionId ?? '',
+          sessionId,
           text: stored.text,
           toolCalls: [],
           interrupted: false,
@@ -275,14 +291,9 @@ export function useExtraction(connectionId: string | null, enabled = true) {
           extractedAt: stored.extractedAt,
         }
       }
-      const fromAdk = version
-        ? sessionId
-          ? extractionApi.fetchExtractionSession(connectionId!, sessionId)
-          : Promise.resolve(null)
-        : extractionApi.fetchLatestExtraction(connectionId!)
-      return fromAdk.catch(() => null)
+      return extractionApi.fetchExtractionSession(connectionId!, sessionId).catch(() => null)
     },
-    enabled: Boolean(connectionId) && enabled && (!version || versions.isSuccess),
+    enabled: Boolean(connectionId) && enabled && versions.isSuccess,
     staleTime: 5 * 60_000,
     retry: false,
   })
@@ -290,22 +301,37 @@ export function useExtraction(connectionId: string | null, enabled = true) {
 
 export function useRunExtraction(connectionId: string | null) {
   const qc = useQueryClient()
-  return useMutation<ExtractionResult, unknown, { datasetIds: string[]; domain?: string }>({
-    mutationFn: async ({ datasetIds, domain }) => {
-      const result = await extractionApi.runExtraction(connectionId!, datasetIds, { domain })
-      try {
-        const final = await extractionApi
-          .fetchExtractionSession(connectionId!, result.sessionId)
-          .catch(() => null)
-        const report = final?.text || result.text
-        if (report.trim()) {
-          await versionsApi.saveExtraction(connectionId!, {
-            sessionId: result.sessionId,
-            report,
-            datasetIds,
-          })
-        }
-      } catch {}
+  return useMutation<ExtractionResult, unknown, { datasetIds: string[] }>({
+    mutationFn: async ({ datasetIds }) => {
+      const state = await versionsApi.fetchVersions(connectionId!)
+      const draft = state.draft ?? (await versionsApi.createVersion(connectionId!)).draft
+      if (!draft) throw new Error('No draft version to analyse into.')
+      const profile = await connectionsApi.getContextProfile(connectionId!)
+
+      const result = await extractionApi.runExtraction(connectionId!, {
+        versionId: draft.id,
+        contextName: profile?.name || draft.name,
+        contextDescription: profile?.description ?? null,
+        datasetIds,
+      })
+      const report = result.text.trim() || 'Extraction finished without a written summary.'
+      await versionsApi
+        .saveExtraction(connectionId!, { sessionId: result.sessionId, report, datasetIds })
+        .catch(() => undefined)
+
+      const id = connectionId!
+      await Promise.all([
+        qc.fetchQuery({
+          queryKey: [...contextKeys.factsByTable(id), DEFAULT_TABLES_QUERY],
+          queryFn: () => contextObjectsApi.fetchFactsByTable(id, DEFAULT_TABLES_QUERY),
+          staleTime: 0,
+        }),
+        qc.fetchQuery({
+          queryKey: [...contextKeys.understanding(id), DEFAULT_GLOSSARY_QUERY],
+          queryFn: () => contextObjectsApi.fetchUnderstanding(id, DEFAULT_GLOSSARY_QUERY),
+          staleTime: 0,
+        }),
+      ]).catch(() => undefined)
       return result
     },
     onSuccess: () => {
@@ -427,6 +453,10 @@ export function useDecideReviewItem(connectionId: string | null) {
       qc.invalidateQueries({ queryKey: contextKeys.review(connectionId ?? '') })
       qc.invalidateQueries({ queryKey: contextKeys.publish(connectionId ?? '') })
       invalidateVersions(qc, connectionId)
+      return Promise.all([
+        qc.invalidateQueries({ queryKey: contextKeys.factsByTable(connectionId ?? '') }),
+        qc.invalidateQueries({ queryKey: contextKeys.understanding(connectionId ?? '') }),
+      ])
     },
   })
 }
@@ -512,5 +542,68 @@ export function usePublications(connectionId: string | null, enabled = true) {
     queryFn: () => publishApi.listPublications(connectionId!),
     enabled: Boolean(connectionId) && enabled,
     ...proposedQueryOptions<PublishedVersion[]>(),
+  })
+}
+
+export function useRefreshFacts(connectionId: string | null) {
+  const qc = useQueryClient()
+  return () => {
+    if (!connectionId) return
+    for (const key of [
+      contextKeys.factsByTable(connectionId),
+      contextKeys.understanding(connectionId),
+      contextKeys.contextObjects(connectionId),
+      contextKeys.review(connectionId),
+      contextKeys.model(connectionId),
+    ]) {
+      void qc.invalidateQueries({ queryKey: key })
+    }
+  }
+}
+
+export function useContextSharing(connectionId: string | null, enabled = true) {
+  return useQuery<ContextSharing>({
+    queryKey: contextKeys.sharing(connectionId ?? ''),
+    queryFn: () => accessApi.fetchContextSharing(connectionId!),
+    enabled: Boolean(connectionId) && enabled,
+  })
+}
+
+export function useShareablePeople(connectionId: string | null, enabled = true) {
+  return useQuery<ContextSharePerson[]>({
+    queryKey: contextKeys.shareablePeople(connectionId ?? ''),
+    queryFn: () => accessApi.listShareablePeople(connectionId!),
+    enabled: Boolean(connectionId) && enabled,
+    staleTime: 60_000,
+  })
+}
+
+function sharingUpdated(qc: QueryClient, connectionId: string, sharing: ContextSharing) {
+  qc.setQueryData(contextKeys.sharing(connectionId), sharing)
+  qc.invalidateQueries({ queryKey: contextKeys.connections() })
+  qc.invalidateQueries({ queryKey: contextKeys.companyPublished() })
+}
+
+export function useShareContext(connectionId: string | null) {
+  const qc = useQueryClient()
+  return useMutation<ContextSharing, unknown, { userId: number; level: ContextAccessLevel }>({
+    mutationFn: ({ userId, level }) => accessApi.shareContext(connectionId!, userId, level),
+    onSuccess: (sharing) => sharingUpdated(qc, connectionId!, sharing),
+  })
+}
+
+export function useUnshareContext(connectionId: string | null) {
+  const qc = useQueryClient()
+  return useMutation<ContextSharing, unknown, number>({
+    mutationFn: (userId) => accessApi.unshareContext(connectionId!, userId),
+    onSuccess: (sharing) => sharingUpdated(qc, connectionId!, sharing),
+  })
+}
+
+export function useSetGeneralAccess(connectionId: string | null) {
+  const qc = useQueryClient()
+  return useMutation<ContextSharing, unknown, GeneralAccess>({
+    mutationFn: (generalAccess) => accessApi.setGeneralAccess(connectionId!, generalAccess),
+    onSuccess: (sharing) => sharingUpdated(qc, connectionId!, sharing),
   })
 }

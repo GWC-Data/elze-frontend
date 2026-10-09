@@ -31,7 +31,6 @@ export function defaultSchedule(): AgentSchedule {
   }
 }
 
-// Returns the first problem, or null. The same rules the backend is expected to apply.
 export function validateSchedule(schedule: AgentSchedule): string | null {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(schedule.time)) return 'Choose a time.'
   if (!schedule.prompt.trim()) return 'Tell the agent what to do when the schedule runs.'
@@ -46,8 +45,6 @@ export function validateSchedule(schedule: AgentSchedule): string | null {
   return null
 }
 
-// Keep only the fields the chosen frequency uses, so a stale weekday never rides along
-// on a daily schedule.
 export function normalizeSchedule(schedule: AgentSchedule): AgentSchedule {
   const base: AgentSchedule = {
     enabled: schedule.enabled,

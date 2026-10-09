@@ -40,6 +40,10 @@ export const contextKeys = {
     [...contextKeys.review(connectionId), filters] as const,
 
   publish: (connectionId: string) => [...contextKeys.all, 'publish', connectionId] as const,
+
+  sharing: (connectionId: string) => [...contextKeys.all, 'sharing', connectionId] as const,
+  shareablePeople: (connectionId: string) =>
+    [...contextKeys.sharing(connectionId), 'people'] as const,
   publishSummary: (connectionId: string) =>
     [...contextKeys.publish(connectionId), 'summary'] as const,
 }

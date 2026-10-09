@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { WorkflowStepId } from '@/types/metadataLakehouse'
+import { useConnectionAccess } from '@/hooks/useMetadataLakehouse'
+import { accessAtLeast } from '@/lib/contextAccess'
 import {
   WORKFLOW_STEPS,
   WorkflowContext,
@@ -12,14 +14,14 @@ export function WorkflowProvider({
   children,
   initialConnectionId = null,
   versionId = null,
-  canWrite = true,
+  canCreate = true,
   initialStep,
   initialFurthest,
 }: {
   children: ReactNode
   initialConnectionId?: string | null
   versionId?: string | null
-  canWrite?: boolean
+  canCreate?: boolean
   initialStep?: WorkflowStepId
   initialFurthest?: WorkflowStepId
 }) {
@@ -35,6 +37,8 @@ export function WorkflowProvider({
     const reach = initialFurthest ?? resumeAt ?? 'context'
     return stepIndex(reach) >= stepIndex(resumeAt ?? 'context') ? reach : (resumeAt ?? 'context')
   })
+  const access = useConnectionAccess(connectionId)
+  const canWrite = connectionId ? accessAtLeast(access, 'edit') : canCreate
   const readOnly = viewing || !canWrite
   const [selectedDatasetIds, setSelectedDatasetIds] = useState<string[] | null>(null)
   const [activeTableId, setActiveTableId] = useState<string | null>(null)
@@ -80,6 +84,7 @@ export function WorkflowProvider({
       setConnectionId,
       versionId: viewing ? versionId : null,
       readOnly,
+      access,
       step,
       goToStep,
       next,
@@ -97,6 +102,7 @@ export function WorkflowProvider({
       viewing,
       versionId,
       readOnly,
+      access,
       step,
       goToStep,
       next,

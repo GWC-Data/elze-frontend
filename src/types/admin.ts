@@ -22,21 +22,17 @@ export interface Company {
   userCount?: number
   dashboardCount?: number
   pendingCount?: number
-  // Enabled feature ids, Metadata Lakehouse included.
   features?: FeatureId[]
   admin?: AdminUser
 }
 
-// backend/src/constants/features.ts - keep the ids in step.
 export type FeatureId = 'metadata_lakehouse' | 'data_analyst' | 'agents' | 'dashboards'
 
 export interface FeatureDef {
   id: FeatureId
   label: string
   description: string
-  // On for every company; shown switched on and disabled.
   locked: boolean
-  // The sidebar entries it covers.
   covers: string[]
 }
 
@@ -58,7 +54,6 @@ export interface CompanyOption {
 export interface NewCompany {
   name: string
   slug?: string
-  // Toggleable features to switch on; Metadata Lakehouse is always on.
   features?: FeatureId[]
   admin: {
     username: string
@@ -93,18 +88,13 @@ export interface PermissionDef {
   label: string
   description: string
   platformOnly: boolean
-  // The feature that owns it; null = core (people, groups, roles, audit).
   feature?: FeatureId | null
 }
 
-// One row of a company's role editor (GET /roles/permissions).
 export interface RolePermissionOption extends PermissionDef {
   feature: FeatureId | null
-  // The company has the feature (always true for core permissions).
   featureEnabled: boolean
-  // This caller may put it in a role: feature on, not admin-only, and held by the caller.
   assignable: boolean
-  // Stays with the company admin role; never in a custom role.
   adminOnly: boolean
 }
 
@@ -122,7 +112,6 @@ export interface CompanyRole {
   userCount: number
   createdAt: string | null
   updatedAt: string | null
-  // Who in the company last changed it, and when.
   modifiedAt: string | null
   modifiedBy: string | null
 }
@@ -132,9 +121,7 @@ export interface BuiltInCompanyRole {
   label: string
   permissions: string[]
   userCount: number
-  // The caller may change it for this company (Member only; never Company admin).
   editable: boolean
-  // The company has edited its copy: it no longer follows the platform owner's defaults.
   customized: boolean
   modifiedAt: string | null
   modifiedBy: string | null
@@ -263,7 +250,6 @@ export interface AuditLogEntry {
   companyName?: string
 }
 
-/** How much of the trail the reader sees: the platform everything, a company admin their company, a user their own. */
 export type AuditScope = 'all' | 'company' | 'self'
 
 export interface AuditLogPage extends Paged<AuditLogEntry> {

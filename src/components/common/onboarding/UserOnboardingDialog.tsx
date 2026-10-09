@@ -53,7 +53,6 @@ export function UserOnboardingDialog({
   const [displayName, setDisplayName] = useState('')
   const [role, setRole] = useState<RoleName>('USER')
   const [companyId, setCompanyId] = useState<number | null>(null)
-  // One of the company's own roles for a member; null = the built-in Member role.
   const [customRoleId, setCustomRoleId] = useState<number | null>(null)
 
   const [pending, setPending] = useState(false)

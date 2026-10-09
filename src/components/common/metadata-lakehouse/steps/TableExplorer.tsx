@@ -1,42 +1,58 @@
-import { useDeferredValue, useState } from 'react'
+import { createContext, useContext, useDeferredValue, useRef, useState } from 'react'
 import { useWorkflow } from '@/context/workflowContext'
-import type { ReactNode } from 'react'
-import { MessageCircle, Pencil, Search } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import type { MouseEvent, ReactNode } from 'react'
+import { ArrowLeft, AtSign, Check, ChevronRight, Columns3, Filter, Loader2, Pencil, Search, Table2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useAuth } from '@/context/authContext'
 import { cn } from '@/lib/utils'
 import { EmptyState } from '@/components/common/metadata-lakehouse/DataStates'
 import { Pagination } from '@/components/common/Pagination'
 import { serverPage } from '@/hooks/usePagination'
 import { Eyebrow, Headline, Lede, MetaLine, StatusBadge } from '@/components/common/metadata-lakehouse/primitives'
 import { formatExact } from '@/lib/format'
-import { DEFAULT_TABLES_QUERY, useFactsByTable } from '@/hooks/useMetadataLakehouse'
+import { notify } from '@/lib/notify'
+import { DEFAULT_TABLES_QUERY, useDecideReviewItem, useFactsByTable } from '@/hooks/useMetadataLakehouse'
 import type { Fact, TableFacts } from '@/api/contextObjects.api'
 import { FactEditSheet } from '@/components/common/metadata-lakehouse/steps/FactEditSheet'
 import { labelFor, text } from '@/lib/factFields'
 import { FieldList, FieldValue } from '@/components/common/metadata-lakehouse/steps/FieldDisplay'
+import { columnMention, tableMention } from '@/components/common/metadata-lakehouse/steps/mentions'
+import { Hint } from '@/components/common/Hint'
+import { ReadableText } from '@/components/common/metadata-lakehouse/steps/ReadableText'
+import type { MentionControls } from '@/components/common/metadata-lakehouse/steps/mentions'
+
+interface ReviewActions {
+  approve: (fact: Fact) => void
+  approvingId: string | null
+}
+
+const ReviewActionsContext = createContext<ReviewActions | null>(null)
 
 export function TableExplorer({
   connectionId,
-  onAskAboutTable,
+  mention,
+  narrow = false,
 }: {
   connectionId: string
-  onAskAboutTable?: (tableName: string) => void
+  mention?: MentionControls
+  narrow?: boolean
 }) {
-  const { can } = useAuth()
   const { readOnly } = useWorkflow()
-  const canEdit = can('context.update') && !readOnly
+  const canEdit = !readOnly
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [reviewOnly, setReviewOnly] = useState(false)
+  const [openId, setOpenId] = useState<string | null>(null)
   const [editing, setEditing] = useState<Fact | null>(null)
+  const [approvingId, setApprovingId] = useState<string | null>(null)
+  const decide = useDecideReviewItem(connectionId)
+  const sectionRef = useRef<HTMLElement>(null)
   const query = useDeferredValue(search).trim()
 
   const facts = useFactsByTable(connectionId, {
     ...DEFAULT_TABLES_QUERY,
     ...(query ? { search: query } : {}),
+    ...(reviewOnly ? { review: 'pending' as const } : {}),
     page,
   })
   const data = facts.data
@@ -53,188 +69,443 @@ export function TableExplorer({
 
   const onEdit = canEdit ? setEditing : undefined
   const columnCount = data.counts.column_stats ?? 0
+  const opened = openId ? (data.tables.find((g) => g.table.id === openId) ?? null) : null
+
+  const openTable = (group: TableFacts) => {
+    setOpenId(group.table.id)
+    const top = sectionRef.current?.getBoundingClientRect().top ?? 0
+    if (top < 0) sectionRef.current?.scrollIntoView({ block: 'start' })
+  }
+
+  const approve = async (fact: Fact) => {
+    setApprovingId(fact.id)
+    try {
+      await decide.mutateAsync({ id: fact.id, decision: 'approve' })
+    } catch (err) {
+      notify.failure(`approve ${shortLabel(fact.qualifiedName)}`, err)
+    } finally {
+      setApprovingId(null)
+    }
+  }
+  const reviewActions: ReviewActions | null = canEdit
+    ? { approve: (fact) => void approve(fact), approvingId }
+    : null
+
+  const refine = (apply: () => void) => {
+    apply()
+    setPage(1)
+    setOpenId(null)
+  }
 
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        <StatBadge label="Tables" value={formatExact(data.tableCount)} />
-        <StatBadge label="Columns profiled" value={formatExact(columnCount)} />
-        <StatBadge
-          label="Needs review"
-          value={formatExact(data.needsReview)}
-          hint={`of ${formatExact(data.count)} facts`}
-        />
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <Eyebrow>Tables</Eyebrow>
-          <Headline className="mt-1 text-2xl">What the agent found, table by table</Headline>
-          <p className="mt-1 font-serif text-[15px] italic text-muted-foreground">
-            Descriptions, column profiles, keys, lineage and usage, written from each dataset.
-          </p>
-        </div>
-        <div className="relative w-full max-w-[260px]">
-          <Search
-            className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
+    <ReviewActionsContext.Provider value={reviewActions}>
+      <section ref={sectionRef} className="scroll-mt-6 space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatBadge label="Tables" value={formatExact(data.tableCount)} />
+          <StatBadge label="Columns profiled" value={formatExact(columnCount)} />
+          <ReviewFilter
+            count={data.reviewCounts ? data.reviewCounts.tables + data.reviewCounts.columns : data.needsReview}
+            active={reviewOnly}
+            onToggle={() => refine(() => setReviewOnly((v) => !v))}
           />
-          <Input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              setPage(1)
-            }}
-            placeholder="Search tables, columns, text…"
-            aria-label="Search tables and what the agent wrote about them"
-            className="h-8 pl-8 text-xs"
+          <div className="relative min-w-[220px] flex-1">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <Input
+              value={search}
+              onChange={(e) => {
+                const next = e.target.value
+                refine(() => setSearch(next))
+              }}
+              placeholder="Search tables, columns, descriptions…"
+              aria-label="Search tables and what the agent wrote about them"
+              className="h-10 pl-9 text-sm"
+            />
+          </div>
+        </div>
+
+        {opened ? (
+          <TableDetail
+            group={opened}
+            onBack={() => setOpenId(null)}
+            onEdit={onEdit}
+            mention={mention}
+            reviewOnly={reviewOnly}
           />
-        </div>
-      </div>
+        ) : (
+          <>
+            {data.tables.length === 0 && (reviewOnly || data.unattached.length === 0) ? (
+              <p className="rounded-lg border border-dashed px-3 py-8 text-center text-sm text-muted-foreground">
+                {reviewOnly
+                  ? query
+                    ? `No table or column matching “${search}” is waiting for review.`
+                    : 'No table or column is waiting for review.'
+                  : `Nothing matches “${search}”.`}
+              </p>
+            ) : reviewOnly ? (
+              <ReviewList groups={data.tables} onOpenTable={openTable} onEdit={onEdit} mention={mention} />
+            ) : (
+              <div className={cn('grid grid-cols-1 gap-3', narrow ? '2xl:grid-cols-2' : 'lg:grid-cols-2')}>
+                {data.tables.map((group) => (
+                  <TableCard
+                    key={group.table.id}
+                    group={group}
+                    onOpen={() => openTable(group)}
+                    onEdit={onEdit}
+                    mention={mention}
+                  />
+                ))}
+              </div>
+            )}
 
-      {data.tables.length === 0 && data.unattached.length === 0 ? (
-        <p className="rounded-lg border border-dashed px-3 py-8 text-center text-sm text-muted-foreground">
-          Nothing matches “{search}”.
-        </p>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {data.tables.map((group) => (
-            <TableCard key={group.table.id} group={group} onEdit={onEdit} onAskAboutTable={onAskAboutTable} />
-          ))}
-        </div>
-      )}
+            <Pagination
+              {...serverPage(page, DEFAULT_TABLES_QUERY.pageSize, data.matched)}
+              setPage={setPage}
+              noun="tables"
+            />
 
-      <Pagination
-        {...serverPage(page, DEFAULT_TABLES_QUERY.pageSize, data.matched)}
-        setPage={setPage}
-        noun="tables"
-      />
+            {!reviewOnly && data.unattached.length > 0 ? (
+              <div className="rounded-2xl border bg-card px-6 py-5">
+                <Eyebrow>Other facts · {data.unattached.length}</Eyebrow>
+                <Headline as="h4" className="mb-4 mt-1">Not tied to one table</Headline>
+                <RelatedFacts facts={data.unattached} onEdit={onEdit} />
+              </div>
+            ) : null}
+          </>
+        )}
 
-      {data.unattached.length > 0 ? (
-        <div className="rounded-2xl border bg-card px-6 py-5">
-          <Eyebrow>Other facts · {data.unattached.length}</Eyebrow>
-          <Headline as="h4" className="mb-4 mt-1">Not tied to one table</Headline>
-          <RelatedFacts facts={data.unattached} onEdit={onEdit} />
-        </div>
-      ) : null}
+        <FactEditSheet connectionId={connectionId} fact={editing} onClose={() => setEditing(null)} />
+      </section>
+    </ReviewActionsContext.Provider>
+  )
+}
 
-      <FactEditSheet connectionId={connectionId} fact={editing} onClose={() => setEditing(null)} />
-    </section>
+function ReviewFilter({
+  count,
+  active,
+  onToggle,
+}: {
+  count: number
+  active: boolean
+  onToggle: () => void
+}) {
+  return (
+    <Hint label={active ? 'Show every table again' : 'Show only the tables and columns that need review'}>
+      <button
+        type="button"
+        aria-pressed={active}
+        disabled={count === 0 && !active}
+        onClick={onToggle}
+        className={cn(
+          'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+          active
+            ? 'border-warning/40 bg-warning/15 text-warning-foreground'
+            : 'bg-muted/40 text-muted-foreground hover:border-warning/40 hover:bg-warning/10'
+        )}
+      >
+        <Filter className="size-3" aria-hidden />
+        Needs review
+        <span className="font-semibold text-foreground tabular-nums">{formatExact(count)}</span>
+        {active ? <X className="size-3" aria-hidden /> : null}
+      </button>
+    </Hint>
+  )
+}
+
+function ReviewList({
+  groups,
+  onOpenTable,
+  onEdit,
+  mention,
+}: {
+  groups: TableFacts[]
+  onOpenTable: (group: TableFacts) => void
+  onEdit?: (fact: Fact) => void
+  mention?: MentionControls
+}) {
+  const items = groups.flatMap((group) => [
+    ...(group.table.status === 'pending' ? [{ fact: group.table, group, kind: 'table' as const }] : []),
+    ...group.columns
+      .filter((column) => column.status === 'pending')
+      .map((fact) => ({ fact, group, kind: 'column' as const })),
+  ])
+  return (
+    <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
+      {items.map(({ fact, group, kind }) => {
+        const row =
+          kind === 'table'
+            ? tableMention(fact, mention?.datasetNames)
+            : columnMention(fact, group.table.qualifiedName)
+        const mentioned = Boolean(mention?.mentions.some((m) => m.id === fact.id))
+        const open = () => onOpenTable(group)
+        return (
+          <li
+            key={fact.id}
+            className={cn('flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3', mentioned && 'bg-primary/5')}
+          >
+            {kind === 'table' ? (
+              <Table2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            ) : (
+              <Columns3 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            )}
+            <div className="min-w-0 flex-1">
+              {kind === 'table' ? (
+                <button
+                  type="button"
+                  onClick={open}
+                  className="cursor-pointer break-words text-left text-sm font-semibold hover:text-primary hover:underline"
+                >
+                  {fact.qualifiedName}
+                </button>
+              ) : (
+                <p className="break-words">
+                  <span className="font-mono text-sm font-semibold">{row.label}</span>
+                  <button
+                    type="button"
+                    onClick={open}
+                    className="ml-2 cursor-pointer text-left text-xs text-muted-foreground hover:text-primary hover:underline"
+                  >
+                    in {group.table.qualifiedName}
+                  </button>
+                </p>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <TrustChips fact={fact} />
+              {mention ? (
+                <MentionButton
+                  name={kind === 'table' ? row.label : `column ${row.label}`}
+                  active={mentioned}
+                  onClick={() => mention.onToggle(row)}
+                  iconOnly
+                />
+              ) : null}
+              {onEdit ? (
+                <EditButton
+                  onClick={() => onEdit(fact)}
+                  label={kind === 'table' ? 'Edit table details' : `Edit column ${row.label}`}
+                  small
+                />
+              ) : null}
+            </div>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 
 const TABLE_PLACED = ['description', 'columns', 'row_count', 'primary_key', 'foreign_keys']
 
+function isPick(event: MouseEvent<HTMLElement>): boolean {
+  const target = event.target as HTMLElement
+  if (target.closest('a, button, input, textarea, [role="tab"], [role="menuitem"], [role="option"]')) {
+    return false
+  }
+  return !window.getSelection()?.toString()
+}
+
+function tableShape(table: Fact) {
+  const payload = table.payload
+  return {
+    payload,
+    schema: Array.isArray(payload.columns) ? (payload.columns as Array<Record<string, unknown>>) : [],
+    description: text(payload, 'description'),
+  }
+}
+
+function NeedsReviewChip({ count }: { count: number | undefined }) {
+  if (!count) return null
+  return (
+    <span className="rounded-full border border-warning/30 bg-warning/15 px-1.5 text-[11px] text-warning-foreground">
+      {formatExact(count)} need{count === 1 ? 's' : ''} review
+    </span>
+  )
+}
+
 function TableCard({
   group,
+  onOpen,
   onEdit,
-  onAskAboutTable,
+  mention,
 }: {
   group: TableFacts
+  onOpen: () => void
   onEdit?: (fact: Fact) => void
-  onAskAboutTable?: (tableName: string) => void
+  mention?: MentionControls
 }) {
   const { table, columns, related } = group
-  const payload = table.payload
-  const schema = Array.isArray(payload.columns) ? (payload.columns as Array<Record<string, unknown>>) : []
-  const rowCount = typeof payload.row_count === 'number' ? payload.row_count : null
-  const description = text(payload, 'description')
-  const moreKeys = Object.keys(payload).filter((k) => !TABLE_PLACED.includes(k))
-  const [open, setOpen] = useState(false)
+  const mentioned = Boolean(mention?.mentions.some((m) => m.id === table.id))
+  const { schema, description } = tableShape(table)
 
   return (
-    <article className="flex flex-col overflow-hidden rounded-2xl border bg-card shadow-xs">
+    <article
+      onClick={(event) => isPick(event) && onOpen()}
+      className={cn(
+        'group/card flex cursor-pointer flex-col overflow-hidden rounded-2xl border bg-card shadow-xs transition-colors hover:border-primary/40',
+        mentioned && 'ring-2 ring-primary/60'
+      )}
+    >
       <header className="px-4 pb-4 pt-4">
-        <div className="flex flex-wrap items-start gap-2">
+        <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <Eyebrow>Table</Eyebrow>
             <Headline as="h4" className="mt-1 break-words text-base">
-              {table.qualifiedName}
+              <button
+                type="button"
+                onClick={onOpen}
+                className="cursor-pointer text-left hover:text-primary hover:underline"
+              >
+                {table.qualifiedName}
+              </button>
             </Headline>
             <MetaLine
               className="mt-1.5"
               items={[
-                rowCount !== null ? `${formatExact(rowCount)} rows` : 'rows unknown',
                 `${schema.length || columns.length} columns`,
                 related.length > 0 ? `${related.length} related` : null,
-                <TrustChips key="trust" fact={table} />,
+                <TrustChips key="trust" fact={table} hidePending />,
+                group.needsReview ? <NeedsReviewChip key="review" count={group.needsReview} /> : null,
               ]}
             />
           </div>
+          <ChevronRight
+            className="mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-hover/card:translate-x-0.5 group-hover/card:text-primary"
+            aria-hidden
+          />
         </div>
         {description ? (
           <Lede className="mt-2.5 line-clamp-2 text-sm leading-6">{description}</Lede>
         ) : (
           <p className="mt-2.5 font-serif text-sm italic text-muted-foreground">No description generated.</p>
         )}
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          {onAskAboutTable ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 text-xs"
-              onClick={() => onAskAboutTable(table.qualifiedName)}
-            >
-              <MessageCircle className="size-3" aria-hidden />
-              Ask about this data
-            </Button>
-          ) : null}
-          {onEdit ? (
-            <EditButton onClick={() => onEdit(table)} label="Edit table details" small />
-          ) : null}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={() => setOpen(!open)}
-            aria-expanded={open}
-          >
-            {open ? 'Hide' : 'Show'} details
-          </Button>
-        </div>
+        {mention || onEdit ? (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            {mention ? (
+              <MentionButton
+                name={table.qualifiedName}
+                active={mentioned}
+                onClick={() => mention.onToggle(tableMention(table, mention.datasetNames))}
+              />
+            ) : null}
+            {onEdit ? (
+              <EditButton onClick={() => onEdit(table)} label="Edit table details" small />
+            ) : null}
+          </div>
+        ) : null}
+      </header>
+    </article>
+  )
+}
+
+function TableDetail({
+  group,
+  onBack,
+  onEdit,
+  mention,
+  reviewOnly,
+}: {
+  group: TableFacts
+  onBack: () => void
+  onEdit?: (fact: Fact) => void
+  mention?: MentionControls
+  reviewOnly: boolean
+}) {
+  const { table, columns, related } = group
+  const mentioned = Boolean(mention?.mentions.some((m) => m.id === table.id))
+  const { payload, schema, description } = tableShape(table)
+  const moreKeys = Object.keys(payload).filter((k) => !TABLE_PLACED.includes(k))
+  const columnTotal = reviewOnly ? columns.length : Math.max(schema.length, columns.length)
+
+  return (
+    <article className="overflow-hidden rounded-2xl border bg-card shadow-xs">
+      <header className="border-b px-5 pb-5 pt-3">
+        <Button variant="ghost" size="sm" className="-ml-2 h-7 px-2 text-xs" onClick={onBack}>
+          <ArrowLeft className="size-3.5" aria-hidden />
+          All tables
+        </Button>
+        <Eyebrow className="mt-3">Table</Eyebrow>
+        <Headline as="h3" className="mt-1 break-words text-2xl">
+          {table.qualifiedName}
+        </Headline>
+        <MetaLine
+          className="mt-2"
+          items={[
+            `${schema.length || columns.length} columns`,
+            related.length > 0 ? `${related.length} related` : null,
+            <TrustChips key="trust" fact={table} />,
+          ]}
+        />
+        {description ? (
+          <ReadableText text={description} className="mt-3" />
+        ) : (
+          <p className="mt-3 font-serif text-sm italic text-muted-foreground">No description generated.</p>
+        )}
+        {mention || onEdit ? (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            {mention ? (
+              <MentionButton
+                name={table.qualifiedName}
+                active={mentioned}
+                onClick={() => mention.onToggle(tableMention(table, mention.datasetNames))}
+              />
+            ) : null}
+            {onEdit ? (
+              <EditButton onClick={() => onEdit(table)} label="Edit table details" small />
+            ) : null}
+          </div>
+        ) : null}
       </header>
 
-      {open ? (
-        <Tabs defaultValue="columns" className="border-t px-4 py-3">
-          <TabsList>
-            <TabsTrigger value="columns" className="text-xs">
-              Columns ({Math.max(schema.length, columns.length)})
-            </TabsTrigger>
-            <TabsTrigger value="keys" className="text-xs">
-              Keys & structure
-            </TabsTrigger>
-            <TabsTrigger value="related" className="text-xs">
-              Lineage & usage ({related.length})
-            </TabsTrigger>
-          </TabsList>
+      <DetailSection title={reviewOnly ? `Columns needing review (${columnTotal})` : `Columns (${columnTotal})`}>
+        <ColumnList
+          tableName={table.qualifiedName}
+          schema={schema}
+          columns={columns}
+          onEdit={onEdit}
+          mention={mention}
+          reviewOnly={reviewOnly}
+        />
+      </DetailSection>
 
-          <TabsContent value="columns" className="mt-3">
-            <ColumnList tableName={table.qualifiedName} schema={schema} columns={columns} onEdit={onEdit} />
-          </TabsContent>
+      <DetailSection title="Keys & structure">
+        <div className="space-y-3">
+          <KeyBlock title="Primary key" value={payload.primary_key} />
+          <KeyBlock title="Foreign keys" value={payload.foreign_keys} />
+          {moreKeys.length > 0 ? (
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">More details the agent recorded</p>
+              <FieldList payload={payload} omit={TABLE_PLACED} />
+            </div>
+          ) : null}
+        </div>
+      </DetailSection>
 
-          <TabsContent value="keys" className="mt-3 space-y-3">
-            <KeyBlock title="Primary key" value={payload.primary_key} />
-            <KeyBlock title="Foreign keys" value={payload.foreign_keys} />
-            {moreKeys.length > 0 ? (
-              <div className="rounded-lg border bg-muted/20 p-3">
-                <p className="mb-2 text-xs font-medium text-muted-foreground">More details the agent recorded</p>
-                <FieldList payload={payload} omit={TABLE_PLACED} />
-              </div>
-            ) : null}
-          </TabsContent>
-
-          <TabsContent value="related" className="mt-3">
-            {related.length === 0 ? (
-              <p className="rounded-lg border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
-                The agent recorded no lineage, relationships, metrics or usage for this table.
-              </p>
-            ) : (
-              <RelatedFacts facts={related} onEdit={onEdit} />
-            )}
-          </TabsContent>
-        </Tabs>
-      ) : null}
+      <DetailSection
+        title={reviewOnly ? `Lineage & usage needing review (${related.length})` : `Lineage & usage (${related.length})`}
+      >
+        {related.length === 0 ? (
+          <p className="rounded-lg border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
+            {reviewOnly
+              ? 'Nothing in its lineage or usage is waiting for review.'
+              : 'The agent recorded no lineage, relationships, metrics or usage for this table.'}
+          </p>
+        ) : (
+          <RelatedFacts facts={related} onEdit={onEdit} />
+        )}
+      </DetailSection>
     </article>
+  )
+}
+
+function DetailSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="border-b px-5 py-4 last:border-b-0">
+      <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{title}</h4>
+      {children}
+    </section>
   )
 }
 
@@ -245,32 +516,40 @@ function ColumnList({
   schema,
   columns,
   onEdit,
+  mention,
+  reviewOnly = false,
 }: {
   tableName: string
   schema: Array<Record<string, unknown>>
   columns: Fact[]
   onEdit?: (fact: Fact) => void
+  mention?: MentionControls
+  reviewOnly?: boolean
 }) {
   const shortName = (fact: Fact) => fact.qualifiedName.slice(tableName.length + 1)
   const profiled = new Map(columns.map((c) => [shortName(c), c]))
-  const names = [
-    ...schema.map((c) => String(c.name ?? '')).filter(Boolean),
-    ...columns.map(shortName).filter((n) => !schema.some((c) => String(c.name) === n)),
-  ]
+  const names = reviewOnly
+    ? columns.map(shortName)
+    : [
+        ...schema.map((c) => String(c.name ?? '')).filter(Boolean),
+        ...columns.map(shortName).filter((n) => !schema.some((c) => String(c.name) === n)),
+      ]
   if (names.length === 0) {
-    return <p className="text-sm text-muted-foreground">No columns recorded.</p>
+    return (
+      <p className="text-sm text-muted-foreground">
+        {reviewOnly ? 'No column of this table is waiting for review.' : 'No columns recorded.'}
+      </p>
+    )
   }
 
   return (
     <ul className="divide-y">
       {names.map((name) => {
         const fact = profiled.get(name)
-        const schemaType = schema.find((c) => String(c.name) === name)?.type
         if (!fact) {
           return (
             <li key={name} className="flex flex-wrap items-baseline gap-2 py-3">
               <span className="font-mono text-sm font-medium">{name}</span>
-              {schemaType ? <TypeChip>{String(schemaType)}</TypeChip> : null}
               <span className="ml-auto text-xs text-muted-foreground">Not profiled by the agent</span>
             </li>
           )
@@ -278,20 +557,31 @@ function ColumnList({
         const p = fact.payload
         const description = text(p, 'description')
         const note = text(p, 'note')
+        const mentioned = Boolean(mention?.mentions.some((m) => m.id === fact.id))
         return (
-          <li key={name} className="group py-4">
+          <li
+            key={name}
+            className={cn('group py-4', mentioned && '-mx-2 rounded-md bg-primary/5 px-2 ring-1 ring-primary/40')}
+          >
             <div className="flex flex-wrap items-baseline gap-2">
               <span className="font-mono text-[15px] font-semibold">{name}</span>
-              <TypeChip>{String(p.data_type ?? schemaType ?? 'unknown')}</TypeChip>
               <TrustChips fact={fact} />
               <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
                 <Stat label="Nulls" value={p.null_rate} />
                 <Stat label="Distinct" value={p.distinct_count_est} />
+                {mention ? (
+                  <MentionButton
+                    name={`column ${name}`}
+                    active={mentioned}
+                    onClick={() => mention.onToggle(columnMention(fact, tableName))}
+                    iconOnly
+                  />
+                ) : null}
                 {onEdit ? <EditButton onClick={() => onEdit(fact)} label={`Edit column ${name}`} small /> : null}
               </div>
             </div>
             {description ? (
-              <Lede className="mt-1.5">{description}</Lede>
+              <ReadableText text={description} className="mt-1.5" />
             ) : null}
             {note ? (
               <p className="mt-2 max-w-[72ch] border-l-2 border-primary/40 pl-3 font-serif text-sm italic text-muted-foreground">
@@ -417,15 +707,39 @@ function shortLabel(qualifiedName: string): string {
   return cut > 0 && cut < qualifiedName.length - 1 ? qualifiedName.slice(cut + 1) : qualifiedName
 }
 
-function TrustChips({ fact }: { fact: Fact }) {
+function TrustChips({ fact, hidePending = false }: { fact: Fact; hidePending?: boolean }) {
+  const actions = useContext(ReviewActionsContext)
+  const approving = actions?.approvingId === fact.id
   return (
     <>
-      {fact.verified ? (
-        <span className="inline-flex items-center text-[11px] font-semibold text-primary">
-          Verified
+      {fact.status === 'pending' ? (
+        hidePending ? null : (
+          <>
+            <span className="inline-flex items-center rounded-full border border-warning/30 bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning-foreground">
+              Needs review
+            </span>
+            {actions ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 gap-1 px-2 text-[11px]"
+                disabled={approving}
+                onClick={() => actions.approve(fact)}
+                aria-label={`Approve ${fact.qualifiedName}`}
+              >
+                {approving ? <Loader2 className="size-3 animate-spin" aria-hidden /> : <Check className="size-3" aria-hidden />}
+                Approve
+              </Button>
+            ) : null}
+          </>
+        )
+      ) : fact.status === 'approved' || fact.verified ? (
+        <span className="inline-flex items-center gap-1 rounded-full border border-success/25 bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
+          <Check className="size-3" aria-hidden />
+          Approved
         </span>
       ) : (
-        <StatusBadge status={fact.status === 'pending' ? 'needs review' : fact.status} />
+        <StatusBadge status={fact.status} />
       )}
       {fact.edited ? (
         <span className="inline-flex items-center text-[11px] italic text-foreground">
@@ -443,14 +757,6 @@ function StatBadge({ label, value, hint }: { label: string; value: ReactNode; hi
       <span className="font-semibold text-foreground tabular-nums">{value}</span>
       {hint ? <span className="text-muted-foreground/80">{hint}</span> : null}
     </span>
-  )
-}
-
-function TypeChip({ children }: { children: ReactNode }) {
-  return (
-    <Badge variant="outline" className="font-mono text-[10px] uppercase text-muted-foreground">
-      {children}
-    </Badge>
   )
 }
 
@@ -489,6 +795,39 @@ function KeyBlock({ title, value }: { title: string; value: unknown }) {
         </p>
       )}
     </div>
+  )
+}
+
+function MentionButton({
+  onClick,
+  name,
+  active = false,
+  iconOnly = false,
+}: {
+  onClick: () => void
+  name: string
+  active?: boolean
+  iconOnly?: boolean
+}) {
+  const label = active ? `Remove ${name} from the chat` : `Mention ${name} in the chat`
+  return (
+    <Hint label={label}>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onClick}
+        aria-label={label}
+        aria-pressed={active}
+        className={cn(
+          'h-7 text-xs',
+          iconOnly ? 'w-7 px-0' : 'px-2',
+          active && 'border-primary bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary'
+        )}
+      >
+        {active && !iconOnly ? <Check className="size-3" aria-hidden /> : <AtSign className="size-3" aria-hidden />}
+        {iconOnly ? null : active ? 'Mentioned' : 'Mention'}
+      </Button>
+    </Hint>
   )
 }
 

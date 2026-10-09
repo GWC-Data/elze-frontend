@@ -37,7 +37,6 @@ const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 
 const pageFallback = <InlineLoading label="Loading…" />
 
-// `permission`: one id, or a list meaning "any of these".
 function page<P extends object>(
   Component: LazyExoticComponent<ComponentType<P>>,
   props?: P,
@@ -66,10 +65,8 @@ function sharedRoutes(prefix: string): RouteDef[] {
     { path: `${prefix}metadata-lakehouse/builder`, element: page(MetadataLakehouseBuilderPage, {}, 'context.read') },
     { path: `${prefix}metadata-lakehouse/connections/:id`, element: page(ConnectionDatasetsPage, {}, 'context.read') },
     { path: `${prefix}context/*`, element: <LegacyContextRedirect /> },
-    // Playbooks → Analyse opens a data-analyst chat, so playbook.run reaches it too.
     { path: `${prefix}data-analyst`, element: page(DataAnalystPage, {}, ['analyst.use', 'playbook.run']) },
     { path: `${prefix}data-analyst/:connectionId/:sessionId?`, element: page(DataAnalystPage, {}, ['analyst.use', 'playbook.run']) },
-    // Building a new playbook and editing/publishing a draft both happen in the builder.
     { path: `${prefix}playbook-builder/:connectionId/:sessionId?`, element: page(PlaybookBuilderPage, {}, ['playbook.create', 'playbook.update']) },
     { path: `${prefix}playbooks`, element: page(PlaybooksPage, {}, 'playbook.read') },
     { path: `${prefix}playbooks/:connectionId`, element: page(PlaybooksPage, {}, 'playbook.read') },

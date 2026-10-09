@@ -4,6 +4,16 @@ const enc = encodeURIComponent
 
 const connectionPath = (id: string) => `/context/connections/${enc(id)}`
 
+const ADK_AGENT_PATHS: Record<AdkAgentName, string> = {
+  data_analyst: 'data-analyst',
+  context_layer_extractor: 'context-layer',
+  description_editor: 'description-editor',
+  playbook_builder: 'playbook-builder',
+}
+
+const adkSessionsPath = (contextId: string, agentName: AdkAgentName) =>
+  `/contexts/${enc(contextId)}/${ADK_AGENT_PATHS[agentName]}/sessions`
+
 export const endpoints = {
   health: '/health',
 
@@ -48,7 +58,6 @@ export const endpoints = {
 
   audit: '/audit',
 
-  // A company's own roles (backend companyRole.routes). A platform caller adds ?companyId=.
   companyRoles: {
     root: '/roles',
     permissions: '/roles/permissions',
@@ -114,42 +123,37 @@ export const endpoints = {
     publishSummary: (id: string) => `${connectionPath(id)}/publish/summary`,
     publishValidate: (id: string) => `${connectionPath(id)}/publish/validate`,
     publish: (id: string) => `${connectionPath(id)}/publish`,
+    access: (id: string) => `${connectionPath(id)}/access`,
+    accessPeople: (id: string) => `${connectionPath(id)}/access/people`,
+    accessGeneral: (id: string) => `${connectionPath(id)}/access/general`,
+    accessUser: (id: string, userId: number) => `${connectionPath(id)}/access/users/${userId}`,
   },
 
   adk: {
-    sessions: (workspaceId: string, agentName: AdkAgentName) =>
-      `/workspaces/${enc(workspaceId)}/agents/${agentName}/sessions`,
-    session: (workspaceId: string, agentName: AdkAgentName, sessionId: string) =>
-      `/workspaces/${enc(workspaceId)}/agents/${agentName}/sessions/${enc(sessionId)}`,
-    messages: (workspaceId: string, agentName: AdkAgentName, sessionId: string) =>
-      `/workspaces/${enc(workspaceId)}/agents/${agentName}/sessions/${enc(sessionId)}/messages`,
-    usage: (workspaceId: string, agentName: AdkAgentName, sessionId: string) =>
-      `/workspaces/${enc(workspaceId)}/agents/${agentName}/sessions/${enc(sessionId)}/usage`,
-    interrupt: (workspaceId: string, agentName: AdkAgentName, sessionId: string) =>
-      `/workspaces/${enc(workspaceId)}/agents/${agentName}/sessions/${enc(sessionId)}/interrupt`,
-    artifacts: (workspaceId: string, agentName: AdkAgentName, sessionId: string) =>
-      `/workspaces/${enc(workspaceId)}/agents/${agentName}/sessions/${enc(sessionId)}/artifacts`,
-    artifact: (workspaceId: string, agentName: AdkAgentName, sessionId: string, artifactId: string) =>
-      `/workspaces/${enc(workspaceId)}/agents/${agentName}/sessions/${enc(sessionId)}/artifacts/${enc(artifactId)}`,
+    health: '/health',
+    models: '/models',
 
-    // playbook_builder's own dedicated session surface — NOT agent_name-parameterized.
-    playbookBuilderSessions: (workspaceId: string) => `/workspaces/${enc(workspaceId)}/playbook-builder/sessions`,
-    playbookBuilderSession: (workspaceId: string, sessionId: string) =>
-      `/workspaces/${enc(workspaceId)}/playbook-builder/sessions/${enc(sessionId)}`,
-    playbookBuilderMessages: (workspaceId: string, sessionId: string) =>
-      `/workspaces/${enc(workspaceId)}/playbook-builder/sessions/${enc(sessionId)}/messages`,
-    playbookBuilderUsage: (workspaceId: string, sessionId: string) =>
-      `/workspaces/${enc(workspaceId)}/playbook-builder/sessions/${enc(sessionId)}/usage`,
-    playbookBuilderInterrupt: (workspaceId: string, sessionId: string) =>
-      `/workspaces/${enc(workspaceId)}/playbook-builder/sessions/${enc(sessionId)}/interrupt`,
+    sessions: (contextId: string, agentName: AdkAgentName) => adkSessionsPath(contextId, agentName),
+    session: (contextId: string, agentName: AdkAgentName, sessionId: string) =>
+      `${adkSessionsPath(contextId, agentName)}/${enc(sessionId)}`,
+    messages: (contextId: string, agentName: AdkAgentName, sessionId: string) =>
+      `${adkSessionsPath(contextId, agentName)}/${enc(sessionId)}/messages`,
+    usage: (contextId: string, agentName: AdkAgentName, sessionId: string) =>
+      `${adkSessionsPath(contextId, agentName)}/${enc(sessionId)}/usage`,
+    interrupt: (contextId: string, agentName: AdkAgentName, sessionId: string) =>
+      `${adkSessionsPath(contextId, agentName)}/${enc(sessionId)}/interrupt`,
+    artifacts: (contextId: string, agentName: AdkAgentName, sessionId: string) =>
+      `${adkSessionsPath(contextId, agentName)}/${enc(sessionId)}/artifacts`,
+    artifact: (contextId: string, agentName: AdkAgentName, sessionId: string, artifactId: string) =>
+      `${adkSessionsPath(contextId, agentName)}/${enc(sessionId)}/artifacts/${enc(artifactId)}`,
 
-    // Read-only, workspace-level, no billed LLM turn.
-    playbooks: (workspaceId: string) => `/workspaces/${enc(workspaceId)}/playbooks`,
-    playbook: (workspaceId: string, playbookId: string) =>
-      `/workspaces/${enc(workspaceId)}/playbooks/${enc(playbookId)}`,
+    playbooks: (contextId: string) => `/contexts/${enc(contextId)}/playbooks`,
+    playbook: (contextId: string, playbookId: string) =>
+      `/contexts/${enc(contextId)}/playbooks/${enc(playbookId)}`,
+    contextObjects: (contextId: string) => `/contexts/${enc(contextId)}/context-objects`,
+    contextVersions: (contextId: string) => `/contexts/${enc(contextId)}/context-versions`,
   },
 
-  // Relative to VITE_AGENT_LIBRARY_API_URL, not to /api.
   agentLibrary: {
     agents: '/agents',
     agent: (id: string) => `/agents/${enc(id)}`,

@@ -268,8 +268,6 @@ export function ToolEngine({ data }: ToolEngineProps) {
                 size="sm"
                 variant={isNotify ? "secondary" : "default"}
                 className="cursor-pointer gap-1.5"
-                // The action tracker lived in the retired Mojo service; Elze-backend has no
-                // equivalent yet, so both actions are placeholders until it does.
                 onClick={() => toast("Coming soon")}
               >
                 {isNotify ? (

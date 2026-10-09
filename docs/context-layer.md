@@ -98,7 +98,7 @@ encrypted server-side.
 | Steps | Backend | Configured by |
 |---|---|---|
 | 1 Connect · 2 Discover · 3 Profile | **Node** (`backend/`) | `VITE_CONTEXT_API_URL`, blank = same-origin `/api` |
-| 4 Understand | **Context Layer service** (`Elze-backend/adk_agents/api`) | `VITE_ADK_API_BASE_URL`, default `:8300` |
+| 4 Understand | **Context Layer service** (`Elze-backend/adk_agents/api`) | `VITE_ADK_API_BASE_URL`, default `:7070` |
 | 5–7 | not built | — |
 
 Steps 1–3 are source data and belong to the Node API. Step 4 is an AI job and is the **one

@@ -11,8 +11,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-// Which of the company's own roles a member holds, if any. Only meaningful for the built-in
-// USER role: a custom role's permissions replace USER's. `null` = the built-in Member role.
 const BUILT_IN = 'builtin'
 
 export function CompanyRoleSelect({
@@ -21,7 +19,6 @@ export function CompanyRoleSelect({
   onChange,
   disabled,
 }: {
-  // The member's company. Only a platform caller needs to send it; ignored otherwise.
   companyId: number | null
   value: number | null
   onChange: (roleId: number | null) => void
