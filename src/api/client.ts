@@ -373,3 +373,13 @@ export async function adkRequest<T>(path: string, init?: RequestInit): Promise<T
   if (res.status === 204) return undefined as T
   return (await res.json()) as T
 }
+
+export async function adkStream(path: string, body: Record<string, unknown>): Promise<Response> {
+  const res = await fetchWithSession(`${ADK_API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { ...adkHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new AdkApiError(agentResponseRefusal(res) ?? (await readAdkErrorDetail(res)), res.status)
+  return res
+}

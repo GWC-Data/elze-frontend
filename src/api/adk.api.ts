@@ -1,4 +1,4 @@
-import { adkRequest } from '@/api/client'
+import { adkRequest, adkStream } from '@/api/client'
 import { endpoints } from '@/api/endpoints'
 import type {
   AdkAgentName,
@@ -207,16 +207,48 @@ export async function sendDescriptionEditorMessage(
 
 const CONTEXT_LAYER_REQUEST = 'Create a context layer'
 
+async function readStreamOutcome(response: Response): Promise<{ success: boolean }> {
+  if (!response.body) throw new Error('The context extraction returned no stream to read.')
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    let newlineIndex = buffer.indexOf('\n')
+    while (newlineIndex !== -1) {
+      const line = buffer.slice(0, newlineIndex).trim()
+      buffer = buffer.slice(newlineIndex + 1)
+      newlineIndex = buffer.indexOf('\n')
+
+      if (line === 'event: done') {
+        await reader.cancel().catch(() => undefined)
+        return { success: true }
+      }
+      if (line === 'event: interrupted') {
+        await reader.cancel().catch(() => undefined)
+        return { success: false }
+      }
+    }
+  }
+
+  throw new Error('The context extraction stopped before it finished.')
+}
+
 export async function triggerContextLayer(
   contextId: string,
   sessionId: string,
   body: AdkContextLayerMessageBody = {}
 ): Promise<{ success: boolean }> {
-  return postJson<{ success: boolean }>(endpoints.adk.messages(contextId, 'context_layer_extractor', sessionId), {
+  const response = await adkStream(endpoints.adk.messages(contextId, 'context_layer_extractor', sessionId), {
     text: body.text?.trim() || CONTEXT_LAYER_REQUEST,
     stream: true,
     ...(body.artifactIds?.length ? { artifact_ids: body.artifactIds } : {}),
   })
+  return readStreamOutcome(response)
 }
 
 type ArtifactAgent = Exclude<AdkAgentName, 'playbook_builder'>
