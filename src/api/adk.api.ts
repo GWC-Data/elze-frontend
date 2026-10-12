@@ -205,9 +205,7 @@ export async function sendDescriptionEditorMessage(
   return toChatResponse(raw)
 }
 
-const CONTEXT_LAYER_REQUEST =
-  "Follow that skill's workflow exactly. Report a summary when done: counts by object_type and " +
-  'verified status, PII/policy proposals made.'
+const CONTEXT_LAYER_REQUEST = 'Create a context layer'
 
 export async function triggerContextLayer(
   contextId: string,
@@ -216,6 +214,7 @@ export async function triggerContextLayer(
 ): Promise<{ success: boolean }> {
   return postJson<{ success: boolean }>(endpoints.adk.messages(contextId, 'context_layer_extractor', sessionId), {
     text: body.text?.trim() || CONTEXT_LAYER_REQUEST,
+    stream: true,
     ...(body.artifactIds?.length ? { artifact_ids: body.artifactIds } : {}),
   })
 }
