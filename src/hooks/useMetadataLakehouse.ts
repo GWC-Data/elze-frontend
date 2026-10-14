@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { QueryClient, UseQueryOptions } from '@tanstack/react-query'
 import { isEndpointMissing } from '@/api/client'
@@ -21,6 +22,7 @@ import type {
   ContextAccess,
   ContextAccessLevel,
   ContextProfile,
+  ContextShareGroup,
   ContextSharePerson,
   ContextSharing,
   GeneralAccess,
@@ -301,19 +303,26 @@ export function useExtraction(connectionId: string | null, enabled = true) {
 
 export function useRunExtraction(connectionId: string | null) {
   const qc = useQueryClient()
-  return useMutation<ExtractionResult, unknown, { datasetIds: string[] }>({
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [stopping, setStopping] = useState(false)
+
+  const mutation = useMutation<ExtractionResult, unknown, { datasetIds: string[] }>({
     mutationFn: async ({ datasetIds }) => {
       const state = await versionsApi.fetchVersions(connectionId!)
       const draft = state.draft ?? (await versionsApi.createVersion(connectionId!)).draft
       if (!draft) throw new Error('No draft version to analyse into.')
       const profile = await connectionsApi.getContextProfile(connectionId!)
 
-      const result = await extractionApi.runExtraction(connectionId!, {
-        versionId: draft.id,
-        contextName: profile?.name || draft.name,
-        contextDescription: profile?.description ?? null,
-        datasetIds,
-      })
+      const result = await extractionApi.runExtraction(
+        connectionId!,
+        {
+          versionId: draft.id,
+          contextName: profile?.name || draft.name,
+          contextDescription: profile?.description ?? null,
+          datasetIds,
+        },
+        setSessionId
+      )
       const report = result.text.trim() || 'Extraction finished without a written summary.'
       await versionsApi
         .saveExtraction(connectionId!, { sessionId: result.sessionId, report, datasetIds })
@@ -344,7 +353,26 @@ export function useRunExtraction(connectionId: string | null) {
       qc.invalidateQueries({ queryKey: contextKeys.factsByTable(connectionId ?? '') })
       qc.invalidateQueries({ queryKey: contextKeys.understanding(connectionId ?? '') })
     },
+    onSettled: () => {
+      setSessionId(null)
+      setStopping(false)
+    },
   })
+
+  const stop = async () => {
+    if (!connectionId || !sessionId || stopping) return null
+    setStopping(true)
+    try {
+      const result = await extractionApi.stopExtraction(connectionId, sessionId)
+      if (!result.interrupted) setStopping(false)
+      return result
+    } catch (err) {
+      setStopping(false)
+      throw err
+    }
+  }
+
+  return { ...mutation, stop, stopping, canStop: mutation.isPending && Boolean(sessionId) && !stopping }
 }
 
 export const DEFAULT_FACTS_QUERY: ContextObjectsQuery = { page: 1, pageSize: 25 }
@@ -596,6 +624,31 @@ export function useUnshareContext(connectionId: string | null) {
   const qc = useQueryClient()
   return useMutation<ContextSharing, unknown, number>({
     mutationFn: (userId) => accessApi.unshareContext(connectionId!, userId),
+    onSuccess: (sharing) => sharingUpdated(qc, connectionId!, sharing),
+  })
+}
+
+export function useShareableGroups(connectionId: string | null, enabled = true) {
+  return useQuery<ContextShareGroup[]>({
+    queryKey: [...contextKeys.sharing(connectionId ?? ''), 'groups'],
+    queryFn: () => accessApi.listShareableGroups(connectionId!),
+    enabled: Boolean(connectionId) && enabled,
+    staleTime: 60_000,
+  })
+}
+
+export function useShareContextWithGroup(connectionId: string | null) {
+  const qc = useQueryClient()
+  return useMutation<ContextSharing, unknown, { groupId: number; level: ContextAccessLevel }>({
+    mutationFn: ({ groupId, level }) => accessApi.shareContextWithGroup(connectionId!, groupId, level),
+    onSuccess: (sharing) => sharingUpdated(qc, connectionId!, sharing),
+  })
+}
+
+export function useUnshareContextWithGroup(connectionId: string | null) {
+  const qc = useQueryClient()
+  return useMutation<ContextSharing, unknown, number>({
+    mutationFn: (groupId) => accessApi.unshareContextWithGroup(connectionId!, groupId),
     onSuccess: (sharing) => sharingUpdated(qc, connectionId!, sharing),
   })
 }

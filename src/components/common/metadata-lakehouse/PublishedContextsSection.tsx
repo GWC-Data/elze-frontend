@@ -320,7 +320,7 @@ function PublishedContextCard({
         title={deleting ? `Delete ${group.name} ${deleting.label}?` : ''}
         body={
           deleting
-            ? `Only ${deleting.label} is deleted - its stored snapshot of ${formatExact(deleting.objectCount)} fact${
+            ? `Only ${deleting.label} is deleted, along with its stored snapshot of ${formatExact(deleting.objectCount)} fact${
                 deleting.objectCount === 1 ? '' : 's'
               }. Every other version of “${group.name}” and any open draft stay exactly as they are.`
             : ''

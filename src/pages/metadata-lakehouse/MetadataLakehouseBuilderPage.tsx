@@ -122,8 +122,7 @@ function BuilderShell() {
           <div>
             <h1 className="text-lg font-semibold tracking-tight">Metadata Lakehouse Builder</h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Connect a source, choose datasets, and build the context your agents and dashboards
-              read from.
+              Connect a source, choose datasets, and build the context your agents read from.
             </p>
             {versionId && connectionId ? (
               <ViewingLine connectionId={connectionId} versionId={versionId} />
@@ -212,7 +211,7 @@ function ViewingLine({ connectionId, versionId }: { connectionId: string; versio
           <VersionBadge status="published" label={viewed.label} />
           <span>
             <strong className="font-medium text-foreground">{viewed.name}</strong>
-            {` — published ${formatRelativeTime(viewed.publishedAt)}${live ? ', live' : ', superseded'}. `}
+            {` was published ${formatRelativeTime(viewed.publishedAt)}${live ? ' and is live' : ' and has been superseded'}. `}
             Every step shows what was stored at publish; nothing is re-run.
           </span>
         </>
@@ -256,8 +255,8 @@ function VersionLine({ connectionId }: { connectionId: string | null }) {
           <span>
             <strong className="font-medium text-foreground">{draft.name}</strong>
             {latestPublished
-              ? ` — editing a new version of published ${latestPublished.label}, which stays live until this is published.`
-              : ' — not published yet. Changes are saved as you go.'}
+              ? ` is a new version of published ${latestPublished.label}, which stays live until this is published.`
+              : ' is not published yet. Changes are saved as you go.'}
           </span>
         </>
       ) : latestPublished ? (
@@ -265,7 +264,7 @@ function VersionLine({ connectionId }: { connectionId: string | null }) {
           <VersionBadge status="published" label={latestPublished.label} />
           <span>
             <strong className="font-medium text-foreground">{latestPublished.name}</strong>
-            {` — published ${formatRelativeTime(latestPublished.publishedAt)}. Any change opens the next version as a draft.`}
+            {` was published ${formatRelativeTime(latestPublished.publishedAt)}. Any change opens the next version as a draft.`}
           </span>
         </>
       ) : null}

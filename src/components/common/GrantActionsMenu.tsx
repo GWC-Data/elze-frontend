@@ -37,7 +37,7 @@ export function GrantActionsMenu({
 }) {
   if (!mayChange && !mayRemove) return null
 
-  const describe = (id: AccessLevel) => levels?.find((l) => l.id === id)?.description
+  const describe = (key: AccessLevel) => levels?.find((l) => l.key === key)?.description
 
   return (
     <DropdownMenu>

@@ -1,7 +1,9 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { Check, Loader2, Pencil, Search, SkipForward, X } from 'lucide-react'
+import { Check, Gauge, Info, Loader2, Pencil, Search, SkipForward, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { notify } from '@/lib/notify'
 import { cn } from '@/lib/utils'
 import { StepFrame } from '@/components/common/metadata-lakehouse/StepFrame'
@@ -13,7 +15,7 @@ import {
   QueryBoundary,
   TableSkeleton,
 } from '@/components/common/metadata-lakehouse/DataStates'
-import { AiBadge, ConfidenceMeter, StatusBadge } from '@/components/common/metadata-lakehouse/primitives'
+import { AiBadge, StatusBadge } from '@/components/common/metadata-lakehouse/primitives'
 import { formatText } from '@/lib/format'
 import { endpoints } from '@/api/endpoints'
 import {
@@ -28,11 +30,24 @@ import type { EditableFact } from '@/components/common/metadata-lakehouse/steps/
 
 const REVIEW_PAGE_SIZE = 25
 
+const HIGH_CONFIDENCE = 0.9
+
+const HIGH_CONFIDENCE_LABEL = `${Math.round(HIGH_CONFIDENCE * 100)}%`
+
+const STATUS_OPTIONS = [
+  { value: 'all', label: 'All states' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'skipped', label: 'Skipped' },
+]
+
 export function ReviewStep() {
   const { connectionId, goToStep, readOnly } = useWorkflow()
 
   const [type, setType] = useState<string>('all')
   const [status, setStatus] = useState<string>('all')
+  const [highOnly, setHighOnly] = useState(false)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const deferredSearch = useDeferredValue(search)
@@ -41,11 +56,12 @@ export function ReviewStep() {
     () => ({
       ...(type !== 'all' ? { type } : {}),
       ...(status !== 'all' ? { status } : {}),
+      ...(highOnly ? { minConfidence: HIGH_CONFIDENCE } : {}),
       ...(deferredSearch.trim() ? { search: deferredSearch.trim() } : {}),
       page,
       pageSize: REVIEW_PAGE_SIZE,
     }),
-    [type, status, deferredSearch, page]
+    [type, status, highOnly, deferredSearch, page]
   )
 
   const chooseType = (next: string) => {
@@ -80,13 +96,21 @@ export function ReviewStep() {
     try {
       const result = await bulk.mutateAsync({
         decision: 'approve',
-        filter: { minConfidence: 0.9, ...(type !== 'all' ? { type } : {}) },
+        filter: { minConfidence: HIGH_CONFIDENCE, status: 'pending', ...(type !== 'all' ? { type } : {}) },
       })
       notify.success(`${result.affected} item${result.affected === 1 ? '' : 's'} approved.`)
     } catch (err) {
       notify.failure('approve the high-confidence items', err)
     }
   }
+
+  const highPending = queue.data?.highConfidence?.pending
+  const bulkLabel =
+    highPending === undefined
+      ? `Approve all above ${HIGH_CONFIDENCE_LABEL}`
+      : highPending === 0
+        ? `No items above ${HIGH_CONFIDENCE_LABEL}`
+        : `Approve ${highPending} above ${HIGH_CONFIDENCE_LABEL}`
 
   return (
     <StepFrame
@@ -97,16 +121,44 @@ export function ReviewStep() {
           : 'Approve, edit or reject each generated item. Only approved context is published.'
       }
       actions={
-        readOnly ? undefined : <Button variant="outline" size="sm" onClick={onBulkApprove} disabled={bulk.isPending}>
-          {bulk.isPending ? (
-            <>
-              <Loader2 className="size-4 animate-spin" aria-hidden />
-              Approving…
-            </>
-          ) : (
-            'Approve all above 90%'
-          )}
-        </Button>
+        readOnly ? undefined : (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onBulkApprove}
+              disabled={bulk.isPending || highPending === 0}
+            >
+              {bulk.isPending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  Approving…
+                </>
+              ) : (
+                bulkLabel
+              )}
+            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`How "above ${HIGH_CONFIDENCE_LABEL}" works`}
+                  className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <Info className="size-4" aria-hidden />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-[300px]">
+                <p className="text-xs leading-relaxed">
+                  Approves every pending item whose confidence score is {HIGH_CONFIDENCE_LABEL} or higher. The
+                  extraction agent scores the relationships it finds: 100% when a real foreign key backs it, lower
+                  when it inferred the link from sampled values. Items without a score, such as most tables and
+                  column stats, are never included. Review those yourself.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        )
       }
       refreshing={queue.isFetching && !queue.isPending}
     >
@@ -136,21 +188,38 @@ export function ReviewStep() {
                 />
               ))}
 
-              <select
+              {readOnly ? null : (
+                <FilterChip
+                  label={`≥ ${HIGH_CONFIDENCE_LABEL} confidence`}
+                  count={data.highConfidence?.pending ?? 0}
+                  active={highOnly}
+                  onClick={() => {
+                    const next = !highOnly
+                    setHighOnly(next)
+                    if (next) setStatus('pending')
+                    setPage(1)
+                  }}
+                />
+              )}
+
+              <Select
                 value={status}
-                onChange={(e) => {
-                  setStatus(e.target.value)
+                onValueChange={(value) => {
+                  setStatus(value)
                   setPage(1)
                 }}
-                aria-label="Filter by status"
-                className="ml-auto h-8 rounded-md border border-input bg-transparent px-2 text-xs outline-none focus-visible:border-ring"
               >
-                <option value="all">All states</option>
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-                <option value="skipped">Skipped</option>
-              </select>
+                <SelectTrigger size="sm" className="ml-auto min-w-36" aria-label="Filter by status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
               <div className="relative w-full max-w-[200px]">
                 <Search
@@ -247,6 +316,48 @@ function FilterChip({
   )
 }
 
+const MEDIUM_CONFIDENCE = 0.7
+
+function ConfidenceBadge({ value, pending }: { value: number | null; pending: boolean }) {
+  const ratio =
+    value === null || !Number.isFinite(value) ? null : Math.max(0, Math.min(1, value > 1 ? value / 100 : value))
+  const percent = ratio === null ? null : Math.round(ratio * 100)
+  const qualifies = ratio !== null && ratio >= HIGH_CONFIDENCE
+  const medium = ratio !== null && !qualifies && ratio >= MEDIUM_CONFIDENCE
+
+  const hint =
+    ratio === null
+      ? `The extraction agent did not score this item. It only scores the relationships it finds. "Approve above ${HIGH_CONFIDENCE_LABEL}" skips it, so review it yourself.`
+      : qualifies
+        ? `The agent is ${percent}% confident in this item${pending ? `, so "Approve above ${HIGH_CONFIDENCE_LABEL}" includes it.` : '.'}`
+        : `The agent is ${percent}% confident in this item. That is below ${HIGH_CONFIDENCE_LABEL}, so the bulk approve skips it.`
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          tabIndex={0}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            ratio === null && 'border-dashed text-muted-foreground',
+            qualifies &&
+              'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
+            medium &&
+              'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
+            ratio !== null && !qualifies && !medium && 'bg-muted text-muted-foreground'
+          )}
+        >
+          {qualifies ? <Check className="size-3.5" aria-hidden /> : <Gauge className="size-3.5" aria-hidden />}
+          {ratio === null ? 'No score' : `${percent}% confidence`}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="left" className="max-w-[260px]">
+        <p className="text-xs leading-relaxed">{hint}</p>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 function ReviewRow({
   item,
   pendingDecision,
@@ -280,7 +391,7 @@ function ReviewRow({
         </span>
         {item.status === 'pending' ? <AiBadge /> : <StatusBadge status={item.status} />}
         <div className="ml-auto">
-          <ConfidenceMeter value={item.confidence} />
+          <ConfidenceBadge value={item.confidence} pending={item.status === 'pending'} />
         </div>
       </div>
 

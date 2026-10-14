@@ -200,7 +200,7 @@ export function FieldsSection(ctx: Ctx) {
                     onClick={() => removeColumn(i)}
                   />
                 </div>
-                {badType && <Notice>{meta?.type} column — use COUNT or COUNTDISTINCT.</Notice>}
+                {badType && <Notice>{meta?.type} column. Use COUNT or COUNTDISTINCT.</Notice>}
               </div>
             )
           })}

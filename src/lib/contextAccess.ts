@@ -22,7 +22,7 @@ export const GENERAL_ACCESS_LABELS: Record<GeneralAccess, string> = {
 }
 
 export const GENERAL_ACCESS_HINTS: Record<GeneralAccess, string> = {
-  restricted: 'Only you, company admins and the people added here can open it.',
+  restricted: 'Only you, company admins and the people or groups added here can open it.',
   company: 'Everyone in the company can view it. Editing still needs to be shared.',
 }
 

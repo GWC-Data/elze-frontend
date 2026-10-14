@@ -29,6 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { isHiddenFeature } from '@/constants/sections'
 import type { BuiltInCompanyRole, CompanyRole, RolePermissionOption } from '@/types/admin'
 
 export default function CompanyRolesPage() {
@@ -40,7 +41,7 @@ export default function CompanyRolesPage() {
   const [editingBuiltIn, setEditingBuiltIn] = useState<BuiltInCompanyRole | null>(null)
   const [resetting, setResetting] = useState<BuiltInCompanyRole | null>(null)
   const [resetPending, setResetPending] = useState(false)
-  const [viewing, setViewing] = useState<{ name: string; permissions: string[] } | null>(null)
+  const [viewing, setViewing] = useState<{ name: string; permissionIds: string[] } | null>(null)
   const [deleting, setDeleting] = useState<CompanyRole | null>(null)
   const [deletePending, setDeletePending] = useState(false)
 
@@ -66,7 +67,7 @@ export default function CompanyRolesPage() {
     if (!resetting) return
     setResetPending(true)
     try {
-      await resetBuiltInRole(resetting.name)
+      await resetBuiltInRole(resetting.id)
       notify.success(`${resetting.label} is back to the platform defaults.`)
       setResetting(null)
       roles.reload()
@@ -88,7 +89,11 @@ export default function CompanyRolesPage() {
           <>
             Every member holds one role and gets exactly its permissions.{' '}
             {user?.companyName ? `${user.companyName} has: ` : 'Your company has: '}
-            {enabledFeatures.map((f) => FEATURE_LABELS[f] ?? f).join(', ') || '—'}.
+            {enabledFeatures
+              .filter((f) => !isHiddenFeature(f))
+              .map((f) => FEATURE_LABELS[f] ?? f)
+              .join(', ') || '—'}
+            .
           </>
         }
         actions={
@@ -136,7 +141,7 @@ export default function CompanyRolesPage() {
                       ) : null}
                     </span>
                     <span className="block text-xs text-muted-foreground">
-                      {role.permissions.length} permission{role.permissions.length === 1 ? '' : 's'} ·{' '}
+                      {role.permissionIds.length} permission{role.permissionIds.length === 1 ? '' : 's'} ·{' '}
                       {role.userCount} member{role.userCount === 1 ? '' : 's'}
                       {role.name === 'COMPANY_ADMIN' ? ' · set by the platform owner' : ''}
                     </span>
@@ -164,7 +169,7 @@ export default function CompanyRolesPage() {
                       size="sm"
                       variant="outline"
                       disabled={!options.data}
-                      onClick={() => setViewing({ name: role.label, permissions: role.permissions })}
+                      onClick={() => setViewing({ name: role.label, permissionIds: role.permissionIds })}
                     >
                       View permissions
                     </Button>
@@ -198,13 +203,13 @@ export default function CompanyRolesPage() {
                       <span className="block text-sm font-medium text-foreground">{role.name}</span>
                       <span className="block truncate text-xs text-muted-foreground">
                         {role.description ? `${role.description} · ` : ''}
-                        {role.permissions.length} permission{role.permissions.length === 1 ? '' : 's'} ·{' '}
+                        {role.permissionIds.length} permission{role.permissionIds.length === 1 ? '' : 's'} ·{' '}
                         {role.userCount} member{role.userCount === 1 ? '' : 's'}
                       </span>
-                      {role.permissions.length ? (
+                      {role.permissionIds.length ? (
                         <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                          {role.permissions.slice(0, 6).map(labelFor).join(', ')}
-                          {role.permissions.length > 6 ? ` +${role.permissions.length - 6} more` : ''}
+                          {role.permissionIds.slice(0, 6).map(labelFor).join(', ')}
+                          {role.permissionIds.length > 6 ? ` +${role.permissionIds.length - 6} more` : ''}
                         </span>
                       ) : null}
                     </span>
@@ -218,7 +223,7 @@ export default function CompanyRolesPage() {
                         size="sm"
                         variant="outline"
                         disabled={!options.data}
-                        onClick={() => setViewing({ name: role.name, permissions: role.permissions })}
+                        onClick={() => setViewing({ name: role.name, permissionIds: role.permissionIds })}
                       >
                         View permissions
                       </Button>
@@ -285,7 +290,7 @@ export default function CompanyRolesPage() {
           </DialogHeader>
           {viewing ? (
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <PermissionGrid options={permissionOptions} selected={new Set(viewing.permissions)} readOnly />
+              <PermissionGrid options={permissionOptions} selected={new Set(viewing.permissionIds)} readOnly />
             </div>
           ) : null}
         </DialogContent>
@@ -325,7 +330,7 @@ function RoleEditorDialog({
   const [name, setName] = useState(role?.name ?? '')
   const [description, setDescription] = useState(role?.description ?? '')
   const [selected, setSelected] = useState<Set<string>>(
-    new Set(builtIn ? builtIn.permissions : role?.permissions ?? [])
+    new Set(builtIn ? builtIn.permissionIds : role?.permissionIds ?? [])
   )
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -337,11 +342,11 @@ function RoleEditorDialog({
     const body = {
       name: name.trim(),
       description: description.trim() || null,
-      permissions: [...selected],
+      permissionIds: [...selected],
     }
     try {
       if (builtIn) {
-        await saveBuiltInRole(builtIn.name, body.permissions)
+        await saveBuiltInRole(builtIn.id, body.permissionIds)
         notify.success(
           `${builtIn.label} permissions saved for your company.`,
           builtIn.userCount ? `Its ${builtIn.userCount} member(s) have the change from their next action.` : undefined

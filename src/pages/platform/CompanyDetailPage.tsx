@@ -18,6 +18,7 @@ import {
 import { useAsync } from '@/hooks/useAsync'
 import { usePaths } from '@/hooks/usePaths'
 import { useAuth } from '@/context/authContext'
+import { SHOW_ANALYTICS } from '@/constants/sections'
 import { Page, PageHeader, Section } from '@/components/common/Page'
 import { ActiveBadge, StatusBadge } from '@/components/common/Badges'
 import { PeopleDirectory } from '@/components/common/people/PeopleDirectory'
@@ -56,7 +57,13 @@ export default function CompanyDetailPage() {
     () => listUsers({ companyId, role: 'COMPANY_ADMIN', page: 1, pageSize: 100, sort: 'name' }),
     [companyId]
   )
-  const dashboards = useAsync(() => listCompanyDashboards(companyId), [companyId])
+  const dashboards = useAsync(
+    () =>
+      SHOW_ANALYTICS
+        ? listCompanyDashboards(companyId)
+        : Promise.resolve([] as Awaited<ReturnType<typeof listCompanyDashboards>>),
+    [companyId]
+  )
   const [peopleRefresh, setPeopleRefresh] = useState(0)
 
   const [draft, setDraft] = useState<{ name: string; active: boolean } | null>(null)
@@ -192,19 +199,21 @@ export default function CompanyDetailPage() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="features">Features</TabsTrigger>
           <TabsTrigger value="people">People</TabsTrigger>
-          <TabsTrigger value="dashboards">Dashboards</TabsTrigger>
+          {SHOW_ANALYTICS && <TabsTrigger value="dashboards">Dashboards</TabsTrigger>}
           {can('company.update') && <TabsTrigger value="settings">Settings</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="overview" className="mt-4 space-y-6">
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className={`grid gap-4 ${SHOW_ANALYTICS ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
             <StatCard label="People" value={memberCount} icon={Users} loading={company.loading} />
-            <StatCard
-              label="Dashboards assigned"
-              value={assignedCount}
-              icon={LayoutDashboard}
-              loading={dashboards.loading}
-            />
+            {SHOW_ANALYTICS && (
+              <StatCard
+                label="Dashboards assigned"
+                value={assignedCount}
+                icon={LayoutDashboard}
+                loading={dashboards.loading}
+              />
+            )}
             <StatCard
               label="Awaiting activation"
               value={record.pendingCount ?? null}
@@ -293,7 +302,7 @@ export default function CompanyDetailPage() {
               }}
               empty={{
                 title: 'Nobody here yet',
-                body: 'This company has no accounts. Add its first person — they will be invited by email.',
+                body: 'This company has no accounts. Add its first person. They will be invited by email.',
                 action: can('user.create') ? (
                   <Button onClick={() => setAddingUser(true)}>
                     <UserPlus aria-hidden />
@@ -305,6 +314,7 @@ export default function CompanyDetailPage() {
           </Section>
         </TabsContent>
 
+        {SHOW_ANALYTICS && (
         <TabsContent value="dashboards" className="mt-4">
           <Section
             title="Available dashboards"
@@ -360,6 +370,7 @@ export default function CompanyDetailPage() {
             )}
           </Section>
         </TabsContent>
+        )}
 
         {can('company.update') && (
           <TabsContent value="settings" className="mt-4 space-y-6">
@@ -437,10 +448,10 @@ export default function CompanyDetailPage() {
         open={deleting}
         onOpenChange={setDeleting}
         title={`Delete ${record.name}?`}
-        body="This removes the company and everything inside it — its groups, its dashboard assignments and every grant. It cannot be undone."
+        body="This removes the company and everything inside it. It cannot be undone."
         consequence={
           memberCount && memberCount > 0
-            ? `This company still has ${memberCount} ${memberCount === 1 ? 'account' : 'accounts'}. They must be deleted first — the server will refuse until they are.`
+            ? `This company still has ${memberCount} ${memberCount === 1 ? 'account' : 'accounts'}. They must be deleted first. The server will refuse until they are.`
             : undefined
         }
         confirmLabel="Delete company"

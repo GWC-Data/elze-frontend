@@ -1,8 +1,9 @@
 import { Checkbox } from '@/components/ui/checkbox'
 import { Hint } from '@/components/common/Hint'
 import { FEATURE_LABELS } from '@/constants/features'
+import { isHiddenPermission } from '@/constants/sections'
 import { cn } from '@/lib/utils'
-import type { FeatureId, RolePermissionOption } from '@/types/admin'
+import type { FeatureKey, RolePermissionOption } from '@/types/admin'
 
 const THINGS: Record<string, string> = {
   context: 'Metadata Lakehouse',
@@ -33,7 +34,7 @@ function columnOf(action: string): Column | null {
 interface Row {
   thing: string
   label: string
-  feature: FeatureId | null
+  feature: FeatureKey | null
   featureEnabled: boolean
   cells: Partial<Record<Column, RolePermissionOption>>
   more: RolePermissionOption[]
@@ -44,7 +45,7 @@ function buildRows(options: RolePermissionOption[]): Row[] {
   const rows = new Map<string, Row>()
   for (const option of options) {
     if (option.adminOnly) continue
-    const [thing, action] = option.id.split('.')
+    const [thing, action] = option.key.split('.')
     let row = rows.get(thing)
     if (!row) {
       row = {
@@ -73,15 +74,15 @@ function toggleWithImplications(
   on: boolean
 ): Set<string> {
   const next = new Set(current)
-  const thing = id.split('.')[0]
-  const view = options.find((o) => o.id.startsWith(`${thing}.`) && ['read', 'use'].includes(o.id.split('.')[1]))
+  const thing = (options.find((o) => o.id === id)?.key ?? '').split('.')[0]
+  const view = options.find((o) => o.key.startsWith(`${thing}.`) && ['read', 'use'].includes(o.key.split('.')[1]))
   if (on) {
     next.add(id)
     if (view && view.id !== id) next.add(view.id)
   } else {
     next.delete(id)
     if (view && view.id === id) {
-      for (const o of options) if (o.id.startsWith(`${thing}.`)) next.delete(o.id)
+      for (const o of options) if (o.key.startsWith(`${thing}.`)) next.delete(o.id)
     }
   }
   return next
@@ -124,10 +125,10 @@ export function PermissionGrid({
   onChange?: (next: Set<string>) => void
   readOnly?: boolean
 }) {
-  const rows = buildRows(options)
+  const rows = buildRows(options.filter((option) => !isHiddenPermission(option.key)))
   const set = (id: string, on: boolean) => onChange?.(toggleWithImplications(selected, options, id, on))
 
-  const order: Array<FeatureId | null> = ['metadata_lakehouse', 'data_analyst', 'agents', 'dashboards', null]
+  const order: Array<FeatureKey | null> = ['metadata_lakehouse', 'data_analyst', 'agents', 'dashboards', null]
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border">

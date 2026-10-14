@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Layers } from 'lucide-react'
 import { usePaths } from '@/hooks/usePaths'
 import { formatDateTime, formatRelativeTime } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import type { PublishedContextRow } from '@/lib/lakehouseStats'
 import { PanelEmpty, PanelLoading } from './Panels'
 
@@ -59,8 +60,8 @@ export function LakehouseSection({
           <table className="w-full text-sm">
             <thead className="text-left text-xs text-muted-foreground">
               <tr className="border-b border-border">
-                <th className="px-5 py-2.5 font-medium">Company</th>
-                <th className="px-3 py-2.5 font-medium">Context</th>
+                {platform ? <th className="px-5 py-2.5 font-medium">Company</th> : null}
+                <th className={platform ? 'px-3 py-2.5 font-medium' : 'px-5 py-2.5 font-medium'}>Context</th>
                 <th className="px-3 py-2.5 font-medium">Version</th>
                 <th className="px-3 py-2.5 font-medium">Source</th>
                 <th className="px-3 py-2.5 text-right font-medium">Facts</th>
@@ -86,18 +87,22 @@ export function LakehouseSection({
                     }}
                     className="group cursor-pointer transition-colors hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
                   >
-                    <td className="px-5 py-2.5 font-medium text-foreground">{row.companyName ?? '—'}</td>
-                    <td className="px-3 py-2.5 font-medium text-foreground group-hover:text-primary">
+                    {platform ? (
+                      <td className="px-5 py-2.5 font-medium text-foreground">{row.companyName ?? '—'}</td>
+                    ) : null}
+                    <td
+                      className={cn(
+                        'py-2.5 font-medium text-foreground group-hover:text-primary',
+                        platform ? 'px-3' : 'px-5'
+                      )}
+                    >
                       {row.name}
                     </td>
                     <td className="px-3 py-2.5 text-muted-foreground">
                       {row.label}
                       {row.versionCount > 1 && <span className="ml-1 text-xs">({row.versionCount} published)</span>}
                     </td>
-                    <td className="px-3 py-2.5 text-muted-foreground">
-                      {row.connectionName}
-                      <span className="ml-1 text-xs capitalize">· {row.provider}</span>
-                    </td>
+                    <td className="px-3 py-2.5 capitalize text-muted-foreground">{row.provider || '—'}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{row.objectCount.toLocaleString()}</td>
                     <td className="px-3 py-2.5 text-muted-foreground">{row.publishedBy ?? '—'}</td>
                     <td className="px-5 py-2.5 text-muted-foreground" title={formatDateTime(row.publishedAt)}>

@@ -361,8 +361,8 @@ export function PeopleDirectory({
         open={removing !== null}
         onOpenChange={(open) => !open && setRemoving(null)}
         title={removing ? `Delete ${removing.username}?` : ''}
-        body="This removes the account permanently, along with its dashboard grants and its sessions. It cannot be undone."
-        consequence="If this person should simply stop having access, deactivate them instead — that keeps the record and can be reversed."
+        body="This removes the account permanently, along with its access and its sessions. It cannot be undone."
+        consequence="If this person should simply stop having access, deactivate them instead. That keeps the record and can be reversed."
         confirmLabel="Delete account"
         destructive
         pending={removePending}

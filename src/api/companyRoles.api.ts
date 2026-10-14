@@ -1,6 +1,5 @@
 import { del, get, patch, post, put } from '@/api/client'
 import { endpoints } from '@/api/endpoints'
-import type { RoleName } from '@/types/auth'
 import type { CompanyRole, CompanyRoleInput, CompanyRoles, RolePermissionOptions } from '@/types/admin'
 
 const withCompany = (companyId?: number) => (companyId ? { params: { companyId } } : undefined)
@@ -17,18 +16,18 @@ export function createCompanyRole(body: CompanyRoleInput): Promise<CompanyRole> 
   return post<CompanyRole>(endpoints.companyRoles.root, body)
 }
 
-export function updateCompanyRole(id: number, body: Partial<CompanyRoleInput>): Promise<CompanyRole> {
+export function updateCompanyRole(id: string, body: Partial<CompanyRoleInput>): Promise<CompanyRole> {
   return patch<CompanyRole>(endpoints.companyRoles.one(id), body)
 }
 
-export function deleteCompanyRole(id: number): Promise<{ deleted: true }> {
+export function deleteCompanyRole(id: string): Promise<{ deleted: true }> {
   return del<{ deleted: true }>(endpoints.companyRoles.one(id))
 }
 
-export function saveBuiltInRole(name: RoleName, permissions: string[], companyId?: number): Promise<CompanyRoles> {
-  return put<CompanyRoles>(endpoints.companyRoles.builtIn(name), { permissions, companyId })
+export function saveBuiltInRole(roleId: string, permissionIds: string[], companyId?: number): Promise<CompanyRoles> {
+  return put<CompanyRoles>(endpoints.companyRoles.builtIn(roleId), { permissionIds, companyId })
 }
 
-export function resetBuiltInRole(name: RoleName, companyId?: number): Promise<CompanyRoles> {
-  return del<CompanyRoles>(endpoints.companyRoles.builtIn(name), withCompany(companyId))
+export function resetBuiltInRole(roleId: string, companyId?: number): Promise<CompanyRoles> {
+  return del<CompanyRoles>(endpoints.companyRoles.builtIn(roleId), withCompany(companyId))
 }

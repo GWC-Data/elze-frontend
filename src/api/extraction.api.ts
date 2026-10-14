@@ -1,10 +1,19 @@
 import {
   createContextLayerSession,
   getAdkSession,
+  interruptAdkSession,
   triggerContextLayer,
 } from '@/api/adk.api'
+import type { AdkInterruptResult } from '@/types/adk'
 
 const AGENT = 'context_layer_extractor' as const
+
+export class ExtractionStoppedError extends Error {
+  constructor() {
+    super('The context extraction was interrupted before it finished.')
+    this.name = 'ExtractionStoppedError'
+  }
+}
 
 export interface ExtractionResult {
   sessionId: string
@@ -22,16 +31,21 @@ export interface ExtractionTarget {
   datasetIds: string[]
 }
 
-export async function runExtraction(contextId: string, target: ExtractionTarget): Promise<ExtractionResult> {
+export async function runExtraction(
+  contextId: string,
+  target: ExtractionTarget,
+  onSession?: (sessionId: string) => void
+): Promise<ExtractionResult> {
   const session = await createContextLayerSession(contextId, {
     versionId: target.versionId,
     contextName: target.contextName,
     contextDescription: target.contextDescription,
     datasetIds: target.datasetIds,
   })
+  onSession?.(session.sessionId)
 
   const { success } = await triggerContextLayer(contextId, session.sessionId)
-  if (!success) throw new Error('The context extraction was interrupted before it finished.')
+  if (!success) throw new ExtractionStoppedError()
 
   const report = await fetchExtractionSession(contextId, session.sessionId).catch(() => null)
 
@@ -42,6 +56,10 @@ export async function runExtraction(contextId: string, target: ExtractionTarget)
     interrupted: false,
     datasetIds: target.datasetIds,
   }
+}
+
+export function stopExtraction(contextId: string, sessionId: string): Promise<AdkInterruptResult> {
+  return interruptAdkSession(contextId, AGENT, sessionId)
 }
 
 export async function fetchExtractionSession(

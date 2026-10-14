@@ -89,29 +89,44 @@ http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config
 })
 
+const REFRESH_LOCK = 'da-session-refresh'
+
 let refreshInFlight: Promise<boolean> | null = null
+
+async function requestRefresh(token: string): Promise<boolean> {
+  try {
+    const res = await axios.post<SuccessEnvelope<unknown>>(
+      '/api/auth/refresh',
+      undefined,
+      { headers: { 'X-CSRF-Token': token }, withCredentials: true }
+    )
+    return res.data?.success === true
+  } catch {
+    return false
+  }
+}
+
+async function refreshAcrossTabs(): Promise<boolean> {
+  const before = csrfToken()
+  if (!before) return false
+  if (!('locks' in navigator)) return requestRefresh(before)
+
+  return navigator.locks.request(REFRESH_LOCK, async () => {
+    const current = csrfToken()
+    if (!current) return false
+    if (current !== before) return true
+    return requestRefresh(current)
+  })
+}
 
 async function refreshSession(): Promise<boolean> {
   if (refreshInFlight) return refreshInFlight
 
-  refreshInFlight = (async () => {
-    const token = csrfToken()
-    if (!token) return false
-    try {
-      const res = await axios.post<SuccessEnvelope<unknown>>(
-        '/api/auth/refresh',
-        undefined,
-        { headers: { 'X-CSRF-Token': token }, withCredentials: true }
-      )
-      return res.data?.success === true
-    } catch {
-      return false
-    } finally {
-      queueMicrotask(() => {
-        refreshInFlight = null
-      })
-    }
-  })()
+  refreshInFlight = refreshAcrossTabs().finally(() => {
+    queueMicrotask(() => {
+      refreshInFlight = null
+    })
+  })
 
   return refreshInFlight
 }

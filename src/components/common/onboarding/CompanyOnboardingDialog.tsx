@@ -17,7 +17,8 @@ import { CompanyAvatar } from '@/components/common/CompanyAvatar'
 import { ReviewRow, Stepper } from '@/components/common/onboarding/Stepper'
 import { FeatureToggles } from '@/components/common/features/FeatureToggles'
 import { notify } from '@/lib/notify'
-import type { Company, FeatureDef, FeatureId } from '@/types/admin'
+import { isHiddenFeature } from '@/constants/sections'
+import type { Company, FeatureDef } from '@/types/admin'
 
 const STEPS = ['Company', 'Features', 'Administrator', 'Review']
 const DONE = STEPS.length + 1
@@ -51,7 +52,7 @@ export function CompanyOnboardingDialog({
 
   const [catalogue, setCatalogue] = useState<FeatureDef[] | null>(null)
   const [catalogueError, setCatalogueError] = useState<string | null>(null)
-  const [features, setFeatures] = useState<Set<FeatureId>>(new Set())
+  const [features, setFeatures] = useState<Set<string>>(new Set())
 
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -68,7 +69,7 @@ export function CompanyOnboardingDialog({
     }
   }, [open, catalogue])
 
-  const toggleFeature = (id: FeatureId, on: boolean) =>
+  const toggleFeature = (id: string, on: boolean) =>
     setFeatures((current) => {
       const next = new Set(current)
       if (on) next.add(id)
@@ -108,7 +109,7 @@ export function CompanyOnboardingDialog({
       const company = await createCompany({
         name: name.trim(),
         slug: slug.trim() || undefined,
-        features: [...features],
+        featureIds: [...features],
         admin: {
           username: adminUsername.trim(),
           email: adminEmail.trim().toLowerCase(),
@@ -189,7 +190,11 @@ export function CompanyOnboardingDialog({
                 {catalogueError ? (
                   <FormError message={catalogueError} />
                 ) : catalogue ? (
-                  <FeatureToggles features={catalogue} enabled={features} onToggle={toggleFeature} />
+                  <FeatureToggles
+                    features={catalogue.filter((f) => !isHiddenFeature(f.key))}
+                    enabled={features}
+                    onToggle={toggleFeature}
+                  />
                 ) : (
                   <p className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="size-4 animate-spin" aria-hidden />
@@ -236,7 +241,7 @@ export function CompanyOnboardingDialog({
                   placeholder="Optional"
                 />
 
-                <FormNotice message="This person will administer the company: they add its people and decide who sees which dashboards. You are not setting a password — they choose their own from the emailed link." />
+                <FormNotice message="This person will administer the company: they add its people and manage what each of them can use. You are not setting a password. They choose their own from the emailed link." />
 
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setStep(2)}>
@@ -270,7 +275,7 @@ export function CompanyOnboardingDialog({
                       value={
                         catalogue
                           ? catalogue
-                              .filter((f) => f.locked || features.has(f.id))
+                              .filter((f) => !isHiddenFeature(f.key) && (f.locked || features.has(f.id)))
                               .map((f) => f.label)
                               .join(', ')
                           : '—'
@@ -286,7 +291,7 @@ export function CompanyOnboardingDialog({
 
                 <p className="text-xs text-muted-foreground">
                   The company and its administrator are created together. If the invitation cannot
-                  be delivered, neither is kept — so you can correct the address and try again.
+                  be delivered, neither is kept, so you can correct the address and try again.
                 </p>
 
                 <DialogFooter>

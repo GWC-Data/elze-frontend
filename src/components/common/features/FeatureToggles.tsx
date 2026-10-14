@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import type { FeatureDef, FeatureId } from '@/types/admin'
+import type { FeatureDef } from '@/types/admin'
 
 export function FeatureToggles({
   features,
@@ -11,16 +11,16 @@ export function FeatureToggles({
   busyId = null,
 }: {
   features: FeatureDef[]
-  enabled: ReadonlySet<FeatureId>
-  onToggle: (id: FeatureId, on: boolean) => void
+  enabled: ReadonlySet<string>
+  onToggle: (id: string, on: boolean) => void
   disabled?: boolean
-  busyId?: FeatureId | null
+  busyId?: string | null
 }) {
   return (
     <ul className="divide-y divide-border rounded-lg border border-border">
       {features.map((feature) => {
         const on = feature.locked || enabled.has(feature.id)
-        const inputId = `feature-${feature.id}`
+        const inputId = `feature-${feature.key}`
         return (
           <li key={feature.id} className="flex items-start gap-3 px-4 py-3">
             <div className="min-w-0 flex-1">

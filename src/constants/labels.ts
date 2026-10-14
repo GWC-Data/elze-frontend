@@ -8,9 +8,8 @@ export const ROLE_LABELS: Record<RoleName, string> = {
 
 export const ROLE_DESCRIPTIONS: Record<RoleName, string> = {
   SUPER_ADMIN: 'Runs the platform. Manages every customer, and belongs to none of them.',
-  COMPANY_ADMIN:
-    'Runs this company. Adds people, creates groups, and decides who sees which dashboards.',
-  USER: 'Uses the dashboards they are given. Sees no administration.',
+  COMPANY_ADMIN: 'Runs this company. Adds people and manages what each of them can use.',
+  USER: 'Uses what they are given access to. Sees no administration.',
 }
 
 export const ACCESS_LEVEL_LABELS: Record<AccessLevel, string> = {

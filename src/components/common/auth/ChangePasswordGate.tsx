@@ -17,7 +17,7 @@ export default function ChangePasswordGate() {
       }
     >
       <div className="space-y-4">
-        <FormNotice message="This account is using a password somebody else set. Choose your own to continue — nothing else is available until you do." />
+        <FormNotice message="This account is using a password somebody else set. Choose your own to continue. Nothing else is available until you do." />
 
         <ChangePasswordForm
           onDone={() => {

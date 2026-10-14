@@ -25,7 +25,13 @@ export default function NotFoundPage() {
 
   const destinations: Destination[] = [
     { label: 'Overview', description: 'Your home screen', to: paths.overview, icon: Home },
-    { label: 'Dashboards', description: 'Browse BI dashboards', to: paths.dashboards, icon: LayoutDashboard },
+    {
+      label: 'Dashboards',
+      description: 'Browse BI dashboards',
+      to: paths.dashboards,
+      icon: LayoutDashboard,
+      permission: 'dashboard.read',
+    },
     { label: 'Data analyst', description: 'Ask questions of your data', to: paths.dataAnalyst(), icon: Bot },
     {
       label: 'Metadata Lakehouse',

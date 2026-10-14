@@ -45,7 +45,7 @@ function DataAnalystChat({ connectionId, sessionId }: { connectionId: string; se
       sessionId={sessionId}
       basePath={(sid) => paths.dataAnalyst(connectionId, sid)}
       emptyTitle="Curious about something?"
-      emptyBody="Ask away — let's dig into the data together."
+      emptyBody="Ask away. Let's dig into the data together."
       placeholder="Ask a question about this data…"
       suggestions={[
         "What tables did you find?",

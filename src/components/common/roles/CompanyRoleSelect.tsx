@@ -20,8 +20,8 @@ export function CompanyRoleSelect({
   disabled,
 }: {
   companyId: number | null
-  value: number | null
-  onChange: (roleId: number | null) => void
+  value: string | null
+  onChange: (roleId: string | null) => void
   disabled?: boolean
 }) {
   const id = useId()
@@ -44,8 +44,8 @@ export function CompanyRoleSelect({
         Company role
       </Label>
       <Select
-        value={value === null ? BUILT_IN : String(value)}
-        onValueChange={(next) => onChange(next === BUILT_IN ? null : Number(next))}
+        value={value === null ? BUILT_IN : value}
+        onValueChange={(next) => onChange(next === BUILT_IN ? null : next)}
         disabled={disabled || roles.loading}
       >
         <SelectTrigger id={id} className="w-full">
@@ -54,7 +54,7 @@ export function CompanyRoleSelect({
         <SelectContent>
           <SelectItem value={BUILT_IN}>Member</SelectItem>
           {custom.map((role) => (
-            <SelectItem key={role.id} value={String(role.id)}>
+            <SelectItem key={role.id} value={role.id}>
               {role.name}
             </SelectItem>
           ))}
@@ -62,7 +62,7 @@ export function CompanyRoleSelect({
       </Select>
       <p className="text-xs text-muted-foreground">
         {chosen
-          ? chosen.description || `${chosen.permissions.length} permissions, set on the Roles page.`
+          ? chosen.description || `${chosen.permissionIds.length} permissions, set on the Roles page.`
           : custom.length
             ? 'The built-in Member permissions. Pick one of your company’s roles to replace them.'
             : 'Your company has no roles of its own yet. Create them on the Roles page.'}

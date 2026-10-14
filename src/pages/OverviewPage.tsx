@@ -3,12 +3,13 @@ import {
   BookOpen,
   Bot,
   Building2,
-  Building,
+  ClipboardCheck,
+  Database,
   History,
   KeyRound,
   LayoutDashboard,
   Layers,
-  Link2,
+  Sparkles,
   UserCircle,
   UserPlus,
   Users,
@@ -38,6 +39,7 @@ import {
   type QuickAction,
 } from '@/components/common/overview-dashboard/Panels'
 import { lakehouseAttention, publishedContexts } from '@/lib/lakehouseStats'
+import { SHOW_ANALYTICS } from '@/constants/sections'
 import type { Company } from '@/types/admin'
 
 function greeting(): string {
@@ -55,13 +57,84 @@ function useLakehouse(enabled: boolean) {
   )
   const contexts = useMemo(() => publishedContexts(published.data), [published.data])
   const attention = useMemo(() => lakehouseAttention(connections.data ?? []), [connections.data])
+  const factsLive = useMemo(() => contexts.reduce((sum, row) => sum + row.objectCount, 0), [contexts])
+  const failing = useMemo(
+    () => (connections.data ?? []).filter((c) => c.status !== 'connected').length,
+    [connections.data]
+  )
   return {
     connections: connections.data,
     contexts,
     attention,
+    factsLive,
+    failing,
     loading: connections.loading || published.loading,
+    connectionsLoading: connections.loading,
     error: Boolean(published.error),
   }
+}
+
+type Lakehouse = ReturnType<typeof useLakehouse>
+
+function LakehouseKpis({
+  lakehouse,
+  factsPending,
+  factsGenerated,
+  factsLoading,
+}: {
+  lakehouse: Lakehouse
+  factsPending: number | null | undefined
+  factsGenerated: number | null | undefined
+  factsLoading: boolean
+}) {
+  const paths = usePaths()
+  const connectionCount = lakehouse.connections?.length ?? null
+  return (
+    <>
+      <StatCard
+        label="Published contexts"
+        value={lakehouse.loading ? null : lakehouse.contexts.length}
+        loading={lakehouse.loading}
+        icon={Layers}
+        to={paths.metadataLakehouse}
+        hint="Live for the AI to use"
+      />
+      <StatCard
+        label="AI facts live"
+        value={lakehouse.loading ? null : lakehouse.factsLive}
+        loading={lakehouse.loading}
+        icon={Sparkles}
+        to={paths.metadataLakehouse}
+        hint="AI-generated, approved and published"
+      />
+      <StatCard
+        label="Awaiting review"
+        value={factsPending ?? null}
+        loading={factsLoading}
+        icon={ClipboardCheck}
+        to={paths.metadataLakehouse}
+        hint={
+          factsGenerated
+            ? `of ${factsGenerated.toLocaleString()} AI-generated facts`
+            : 'AI-generated facts not yet approved'
+        }
+      />
+      <StatCard
+        label="Data connections"
+        value={lakehouse.connectionsLoading ? null : connectionCount}
+        loading={lakehouse.connectionsLoading}
+        icon={Database}
+        to={paths.metadataLakehouse}
+        hint={
+          lakehouse.connectionsLoading || connectionCount === null
+            ? undefined
+            : lakehouse.failing > 0
+              ? `${lakehouse.failing} failing`
+              : 'All healthy'
+        }
+      />
+    </>
+  )
 }
 
 export default function OverviewPage() {
@@ -74,7 +147,7 @@ export default function OverviewPage() {
 
   const description =
     paths.shell === 'platform'
-      ? 'Your customers, their dashboards and their Metadata Lakehouse, at a glance.'
+      ? 'Your customers and their Metadata Lakehouse, at a glance.'
       : user?.companyName
         ? `What’s happening in ${user.companyName}.`
         : 'What’s happening in your workspace.'
@@ -113,7 +186,7 @@ function PlatformOverview() {
         meta: 'Its people can’t sign in until it is reactivated',
         to: paths.company(company.id) ?? undefined,
       })
-    } else if (company.dashboardCount === 0) {
+    } else if (SHOW_ANALYTICS && company.dashboardCount === 0) {
       attention.push({
         key: `nodash-${company.id}`,
         title: `${company.name} has no dashboards`,
@@ -136,7 +209,7 @@ function PlatformOverview() {
 
   const actions: QuickAction[] = [
     { label: 'Add a company', to: companiesPath, icon: Building2 },
-    { label: 'Assign dashboards', to: companiesPath, icon: LayoutDashboard },
+    ...(SHOW_ANALYTICS ? [{ label: 'Assign dashboards', to: companiesPath, icon: LayoutDashboard }] : []),
     ...(can('context.read') ? [{ label: 'Open Lakehouse', to: paths.metadataLakehouse, icon: Layers }] : []),
     { label: 'Audit log', to: paths.audit, icon: History },
   ]
@@ -148,18 +221,42 @@ function PlatformOverview() {
           label="On the Lakehouse"
           value={can('context.read') && !lakehouse.loading ? adopting : null}
           loading={lakehouse.loading}
-          icon={Layers}
+          icon={Database}
           to={paths.metadataLakehouse}
           hint={o ? `of ${o.companies} companies have a connection` : undefined}
         />
-        <StatCard
-          label="Dashboards"
-          value={o?.dashboards ?? null}
-          loading={kpiLoading}
-          icon={LayoutDashboard}
-          to={paths.dashboards}
-          hint="In the catalogue"
-        />
+        {can('context.read') ? (
+          <>
+            <StatCard
+              label="Published contexts"
+              value={lakehouse.loading ? null : lakehouse.contexts.length}
+              loading={lakehouse.loading}
+              icon={Layers}
+              to={paths.metadataLakehouse}
+              hint="Live for the AI to use"
+            />
+            <StatCard
+              label="AI facts live"
+              value={lakehouse.loading ? null : lakehouse.factsLive}
+              loading={lakehouse.loading}
+              icon={Sparkles}
+              to={paths.metadataLakehouse}
+              hint="AI-generated, approved and published"
+            />
+            <StatCard
+              label="Awaiting review"
+              value={o?.factsPending ?? null}
+              loading={kpiLoading}
+              icon={ClipboardCheck}
+              to={paths.metadataLakehouse}
+              hint={
+                o?.factsGenerated
+                  ? `of ${o.factsGenerated.toLocaleString()} AI-generated facts`
+                  : 'AI-generated facts not yet approved'
+              }
+            />
+          </>
+        ) : null}
         <StatCard
           label="Companies"
           value={o?.companies ?? null}
@@ -167,22 +264,6 @@ function PlatformOverview() {
           icon={Building2}
           to={companiesPath}
           hint={o ? `${o.companiesActive} active · ${o.companiesInactive} inactive` : undefined}
-        />
-        <StatCard
-          label="Active companies"
-          value={o?.companiesActive ?? null}
-          loading={kpiLoading}
-          icon={Building}
-          to={companiesPath}
-          hint={o && o.companies ? `${Math.round((o.companiesActive / o.companies) * 100)}% of all companies` : undefined}
-        />
-        <StatCard
-          label="Dashboard assignments"
-          value={o?.assignments ?? null}
-          loading={kpiLoading}
-          icon={Link2}
-          to={companiesPath}
-          hint="Dashboards given to companies"
         />
       </KpiGrid>
 
@@ -246,23 +327,13 @@ function CompanyAdminOverview() {
     <>
       <KpiGrid>
         {can('context.read') && (
-          <StatCard
-            label="Published contexts"
-            value={lakehouse.loading ? null : lakehouse.contexts.length}
-            loading={lakehouse.loading}
-            icon={Layers}
-            to={paths.metadataLakehouse}
-            hint="Ready for the agents"
+          <LakehouseKpis
+            lakehouse={lakehouse}
+            factsPending={o?.factsPending}
+            factsGenerated={o?.factsGenerated}
+            factsLoading={overview.loading}
           />
         )}
-        <StatCard
-          label="Dashboards"
-          value={o?.dashboards ?? null}
-          loading={overview.loading}
-          icon={LayoutDashboard}
-          to={paths.dashboards}
-          hint={o ? `${o.dashboardsGranted} open to you` : undefined}
-        />
         {can('user.read') && (
           <StatCard
             label="Members"
@@ -270,27 +341,13 @@ function CompanyAdminOverview() {
             loading={overview.loading}
             icon={Users}
             to={paths.users}
-            hint={o ? `${o.users} in total` : undefined}
-          />
-        )}
-        {can('user.read') && (
-          <StatCard
-            label="Pending invites"
-            value={o?.usersPending ?? null}
-            loading={overview.loading}
-            icon={UserPlus}
-            to={paths.users}
-            hint="Not yet activated"
-          />
-        )}
-        {can('group.read') && (
-          <StatCard
-            label="Groups"
-            value={o?.groupsActive ?? null}
-            loading={overview.loading}
-            icon={UsersRound}
-            to={paths.groups}
-            hint={o ? `${o.groups} in total` : undefined}
+            hint={
+              o
+                ? o.usersPending > 0
+                  ? `${o.usersPending} pending ${o.usersPending === 1 ? 'invite' : 'invites'}`
+                  : `${o.users} in total`
+                : undefined
+            }
           />
         )}
       </KpiGrid>
@@ -302,19 +359,32 @@ function CompanyAdminOverview() {
         error={lakehouse.error}
       />
 
-      <div className="mt-5">
-        <PanelGrid>
-          <AttentionPanel items={attention.slice(0, 6)} loading={overview.loading} />
-          <DashboardsPanel dashboards={dashboards} />
-        </PanelGrid>
-      </div>
-
-      <div className="mt-5">
-        <PanelGrid>
+      {SHOW_ANALYTICS ? (
+        <>
+          <div className="mt-5">
+            <PanelGrid>
+              <AttentionPanel items={attention.slice(0, 6)} loading={overview.loading} />
+              <DashboardsPanel dashboards={dashboards} />
+            </PanelGrid>
+          </div>
+          <div className="mt-5">
+            <PanelGrid>
+              <RecentActivity to={paths.audit} description="Metadata Lakehouse changes in your company" />
+              <QuickActionsPanel actions={actions} />
+            </PanelGrid>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mt-5">
+            <PanelGrid>
+              <AttentionPanel items={attention.slice(0, 6)} loading={overview.loading} />
+              <QuickActionsPanel actions={actions} />
+            </PanelGrid>
+          </div>
           <RecentActivity to={paths.audit} description="Metadata Lakehouse changes in your company" />
-          <QuickActionsPanel actions={actions} />
-        </PanelGrid>
-      </div>
+        </>
+      )}
     </>
   )
 }
@@ -322,7 +392,9 @@ function CompanyAdminOverview() {
 function UserOverview() {
   const { can, dashboards } = useAuth()
   const paths = usePaths()
+  const overview = useAsync(fetchWorkspaceOverview, [])
   const lakehouse = useLakehouse(can('context.read'))
+  const o = overview.data
 
   const actions: QuickAction[] = [
     { label: 'Ask the Data analyst', to: paths.dataAnalyst(), icon: Bot },
@@ -334,21 +406,21 @@ function UserOverview() {
   return (
     <>
       <KpiGrid>
-        <StatCard
-          label="My dashboards"
-          value={dashboards.length}
-          icon={LayoutDashboard}
-          to={paths.dashboards}
-          hint="Shared with you"
-        />
-        {can('context.read') && (
+        {SHOW_ANALYTICS ? (
           <StatCard
-            label="Published contexts"
-            value={lakehouse.loading ? null : lakehouse.contexts.length}
-            loading={lakehouse.loading}
-            icon={Layers}
-            to={paths.metadataLakehouse}
-            hint="Business context the agents use"
+            label="My dashboards"
+            value={dashboards.length}
+            icon={LayoutDashboard}
+            to={paths.dashboards}
+            hint="Shared with you"
+          />
+        ) : null}
+        {can('context.read') && (
+          <LakehouseKpis
+            lakehouse={lakehouse}
+            factsPending={o?.factsPending}
+            factsGenerated={o?.factsGenerated}
+            factsLoading={overview.loading}
           />
         )}
       </KpiGrid>
@@ -360,11 +432,13 @@ function UserOverview() {
         error={lakehouse.error}
       />
 
-      <div className="mt-5">
-        <PanelGrid>
-          <DashboardsPanel dashboards={dashboards} />
-        </PanelGrid>
-      </div>
+      {SHOW_ANALYTICS ? (
+        <div className="mt-5">
+          <PanelGrid>
+            <DashboardsPanel dashboards={dashboards} />
+          </PanelGrid>
+        </div>
+      ) : null}
 
       <div className="mt-5">
         <PanelGrid>

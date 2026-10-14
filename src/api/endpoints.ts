@@ -44,7 +44,7 @@ export const endpoints = {
     users: '/platform/users',
     roles: '/platform/roles',
     permissions: '/platform/roles/permissions',
-    rolePermissions: (name: string) => `/platform/roles/${enc(name)}/permissions`,
+    rolePermissions: (roleId: string) => `/platform/roles/${enc(roleId)}/permissions`,
     settings: '/platform/settings',
     overview: '/platform/overview',
     features: '/platform/features',
@@ -61,8 +61,8 @@ export const endpoints = {
   companyRoles: {
     root: '/roles',
     permissions: '/roles/permissions',
-    one: (id: number) => `/roles/${id}`,
-    builtIn: (name: string) => `/roles/built-in/${enc(name)}`,
+    one: (id: string) => `/roles/${enc(id)}`,
+    builtIn: (roleId: string) => `/roles/built-in/${enc(roleId)}`,
   },
 
   users: {
@@ -78,11 +78,13 @@ export const endpoints = {
     deactivate: (base: string, id: number) => `${base}/${id}/deactivate`,
     activate: (base: string, id: number) => `${base}/${id}/activate`,
     activation: (base: string, id: number) => `${base}/${id}/activation`,
+    permissions: (base: string, id: number) => `${base}/${id}/permissions`,
   },
 
   groups: {
     root: '/groups',
     one: (id: number) => `/groups/${id}`,
+    contexts: (id: number) => `/groups/${id}/contexts`,
   },
 
   access: {
@@ -127,6 +129,8 @@ export const endpoints = {
     accessPeople: (id: string) => `${connectionPath(id)}/access/people`,
     accessGeneral: (id: string) => `${connectionPath(id)}/access/general`,
     accessUser: (id: string, userId: number) => `${connectionPath(id)}/access/users/${userId}`,
+    accessGroups: (id: string) => `${connectionPath(id)}/access/groups`,
+    accessGroup: (id: string, groupId: number) => `${connectionPath(id)}/access/groups/${groupId}`,
   },
 
   adk: {

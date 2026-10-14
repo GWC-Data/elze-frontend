@@ -6,7 +6,8 @@ import { ErrorState, InlineLoading } from '@/components/common/States'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { FeatureToggles } from '@/components/common/features/FeatureToggles'
 import { notify } from '@/lib/notify'
-import type { CompanyFeature, FeatureId } from '@/types/admin'
+import { isHiddenFeature } from '@/constants/sections'
+import type { CompanyFeature } from '@/types/admin'
 
 export function CompanyFeaturesSection({
   companyId,
@@ -21,12 +22,12 @@ export function CompanyFeaturesSection({
 }) {
   const state = useAsync(() => fetchCompanyFeatures(companyId), [companyId])
   const [saved, setSaved] = useState<CompanyFeature[] | null>(null)
-  const [busyId, setBusyId] = useState<FeatureId | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
   const [confirmOff, setConfirmOff] = useState<CompanyFeature | null>(null)
 
   const features = saved ?? state.data?.features ?? null
 
-  const apply = async (id: FeatureId, on: boolean) => {
+  const apply = async (id: string, on: boolean) => {
     if (!features) return
     const next = features
       .filter((f) => !f.locked && (f.id === id ? on : f.enabled))
@@ -46,7 +47,7 @@ export function CompanyFeaturesSection({
     }
   }
 
-  const onToggle = (id: FeatureId, on: boolean) => {
+  const onToggle = (id: string, on: boolean) => {
     if (on) return void apply(id, true)
     setConfirmOff(features?.find((f) => f.id === id) ?? null)
   }
@@ -62,7 +63,7 @@ export function CompanyFeaturesSection({
         <InlineLoading label="Loading features…" />
       ) : (
         <FeatureToggles
-          features={features}
+          features={features.filter((f) => !isHiddenFeature(f.key))}
           enabled={new Set(features.filter((f) => f.enabled).map((f) => f.id))}
           onToggle={onToggle}
           disabled={!editable}

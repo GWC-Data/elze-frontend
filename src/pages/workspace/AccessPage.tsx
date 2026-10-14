@@ -422,14 +422,14 @@ function GrantDialog({
               </SelectTrigger>
               <SelectContent>
                 {levelOptions.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {ACCESS_LEVEL_LABELS[option.id] ?? option.id}
+                  <SelectItem key={option.id} value={option.key}>
+                    {ACCESS_LEVEL_LABELS[option.key] ?? option.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              {levelOptions.find((option) => option.id === level)?.description}
+              {levelOptions.find((option) => option.key === level)?.description}
             </p>
           </div>
         </div>

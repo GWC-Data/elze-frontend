@@ -49,8 +49,8 @@ function DetailsBody({ connection }: { connection: Connection }) {
           <div className="min-w-0 space-y-1">
             <DialogTitle className="text-base">MCP connection</DialogTitle>
             <DialogDescription className="text-xs">
-              Connect an MCP client — Claude Desktop, Claude Code, or any client that speaks
-              streamable HTTP — to this published context.
+              Connect an MCP client (Claude Desktop, Claude Code, or any client that speaks
+              streamable HTTP) to this published context.
             </DialogDescription>
             <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs text-muted-foreground">
               <span className="font-medium text-foreground">{connection.name}</span>

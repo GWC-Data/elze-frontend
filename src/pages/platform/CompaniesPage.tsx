@@ -11,6 +11,7 @@ import { ActiveBadge } from '@/components/common/Badges'
 import { CompanyAvatar } from '@/components/common/CompanyAvatar'
 import { Button } from '@/components/ui/button'
 import { CompanyOnboardingDialog } from '@/components/common/onboarding/CompanyOnboardingDialog'
+import { SHOW_ANALYTICS } from '@/constants/sections'
 import type { Company } from '@/types/admin'
 
 function formatDate(iso: string | null): string {
@@ -110,7 +111,7 @@ export default function CompaniesPage() {
       <Section flush>
         <DataTable
           data={companies.error ? null : (companies.data?.items ?? null)}
-          columns={columns}
+          columns={SHOW_ANALYTICS ? columns : columns.filter((column) => column.key !== 'dashboards')}
           keyOf={(company) => company.id}
           loading={companies.loading}
           error={companies.error}

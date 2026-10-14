@@ -89,6 +89,8 @@ export default function PersonPage({ scope }: { scope: PeopleScope }) {
         onChanged={person.reload}
         actions={{
           updateRole: (role, customRoleId) => api.update(record.id, { role, customRoleId }),
+          loadPermissions: () => api.permissions(record.id),
+          savePermissions: (permissionIds) => api.savePermissions(record.id, permissionIds),
           activate: () => api.activate(record.id),
           deactivate: () => api.deactivate(record.id),
           resendInvitation: () => api.resendActivation(record.id),

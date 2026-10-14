@@ -249,12 +249,12 @@ function ModelCanvas({
           The extraction recorded {graph.nodes.length} table
           {graph.nodes.length === 1 ? '' : 's'} but no relationships between them, and no key or
           column name links them either. That is a real answer for datasets that genuinely share
-          no join — not a failure to look.
+          no join, not a failure to look.
         </p>
       ) : inferredCount > 0 ? (
         <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
           {inferredCount} of these line{inferredCount === 1 ? ' is' : 's are'} detected from the
-          schema — a declared key, a primary-key name match or a shared column name — not recorded
+          schema (a declared key, a primary-key name match or a shared column name), not recorded
           by the extraction. Select one to see which rule found it.
         </p>
       ) : null}

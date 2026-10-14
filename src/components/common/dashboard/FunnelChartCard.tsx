@@ -101,7 +101,7 @@ export default function FunnelChartCard({ spec }: Props) {
                         backgroundColor: inFunnel ? colorFor(d.name, i) : '#cacac7',
                       }}
                     />
-                    <Hint label={`${d.name} — ${d.valueText ?? ''}`}><span
+                    <Hint label={`${d.name}: ${d.valueText ?? ''}`}><span
                       className="min-w-0 flex-1 truncate text-[11px] text-slate-700"
                     >
                       {d.name}

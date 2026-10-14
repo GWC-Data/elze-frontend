@@ -14,6 +14,7 @@ import { notify } from '@/lib/notify'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { SHOW_ANALYTICS } from '@/constants/sections'
 
 export default function CompanySettingsPage() {
   const { can } = useAuth()
@@ -116,7 +117,7 @@ export default function CompanySettingsPage() {
         </Section>
 
         <Section title="At a glance">
-          <dl className="grid gap-4 sm:grid-cols-3 text-sm">
+          <dl className={`grid gap-4 text-sm ${SHOW_ANALYTICS ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
             <div>
               <dt className="text-xs text-muted-foreground">Status</dt>
               <dd className="mt-1.5">
@@ -129,17 +130,21 @@ export default function CompanySettingsPage() {
                 {record.userCount ?? 0}
               </dd>
             </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">Dashboards available</dt>
-              <dd className="mt-1.5 font-medium tabular-nums text-foreground">
-                {record.dashboardCount ?? 0}
-              </dd>
-            </div>
+            {SHOW_ANALYTICS && (
+              <div>
+                <dt className="text-xs text-muted-foreground">Dashboards available</dt>
+                <dd className="mt-1.5 font-medium tabular-nums text-foreground">
+                  {record.dashboardCount ?? 0}
+                </dd>
+              </div>
+            )}
           </dl>
-          <p className="mt-4 text-xs text-muted-foreground">
-            Which dashboards your company may use is decided by the platform owner. You decide who
-            here sees each of them.
-          </p>
+          {SHOW_ANALYTICS && (
+            <p className="mt-4 text-xs text-muted-foreground">
+              Which dashboards your company may use is decided by the platform owner. You decide who
+              here sees each of them.
+            </p>
+          )}
         </Section>
       </div>
     </Page>

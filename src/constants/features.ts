@@ -1,13 +1,13 @@
-import type { FeatureId } from '@/types/admin'
+import type { FeatureKey } from '@/types/admin'
 
-export const FEATURE_LABELS: Record<FeatureId, string> = {
+export const FEATURE_LABELS: Record<FeatureKey, string> = {
   metadata_lakehouse: 'Metadata Lakehouse',
   data_analyst: 'Data analyst agent',
   agents: 'Agents',
   dashboards: 'Dashboards',
 }
 
-const FEATURE_PREFIXES: Array<[string, FeatureId]> = [
+const FEATURE_PREFIXES: Array<[string, FeatureKey]> = [
   ['context.', 'metadata_lakehouse'],
   ['analyst.', 'data_analyst'],
   ['playbook.', 'data_analyst'],
@@ -21,7 +21,7 @@ const FEATURE_PREFIXES: Array<[string, FeatureId]> = [
   ['scope.', 'dashboards'],
 ]
 
-export function featureOfPermission(permission: string): FeatureId | null {
+export function featureOfPermission(permission: string): FeatureKey | null {
   const hit = FEATURE_PREFIXES.find(([prefix]) => permission.startsWith(prefix))
   return hit ? hit[1] : null
 }

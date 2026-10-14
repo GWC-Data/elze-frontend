@@ -395,16 +395,15 @@ function DatasetTable({
             <strong className="font-medium">
               {configuredIds.length} dataset{configuredIds.length === 1 ? '' : 's'}
             </strong>{' '}
-            already configured for this connection
+            already configured for this connection.
             {offPageCount > 0 ? (
               <>
                 {' '}
-                — {offPageCount} of them {offPageCount === 1 ? 'is' : 'are'} outside the
+                {offPageCount} of them {offPageCount === 1 ? 'is' : 'are'} outside the
                 current listing and {offPageCount === 1 ? 'is' : 'are'} shown first below,
                 so {offPageCount === 1 ? 'it stays' : 'they stay'} selected when you save.
               </>
             ) : null}
-            .
           </span>
           {dirty && !readOnly ? (
             <Button

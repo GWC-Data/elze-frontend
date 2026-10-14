@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Building2, Check, ChevronsUpDown, Crown, Loader2, Lock, Share2, X } from 'lucide-react'
+import { Building2, Check, ChevronsUpDown, Crown, Loader2, Lock, Share2, UsersRound, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -39,12 +39,16 @@ import {
 import {
   useContextSharing,
   useSetGeneralAccess,
+  useShareableGroups,
   useShareablePeople,
   useShareContext,
+  useShareContextWithGroup,
   useUnshareContext,
+  useUnshareContextWithGroup,
 } from '@/hooks/useMetadataLakehouse'
 import type {
   ContextAccessLevel,
+  ContextShareGroupGrant,
   ContextSharePerson,
   GeneralAccess,
 } from '@/types/metadataLakehouse'
@@ -69,8 +73,8 @@ export function ContextShareDialog({
             Share {name}
           </DialogTitle>
           <DialogDescription>
-            Choose who in your company can open this context — its draft and every published
-            version — and what they can do with it.
+            Choose which people and groups in your company can open this context (its draft and
+            every published version) and what they can do with it.
           </DialogDescription>
         </DialogHeader>
         {open && connectionId ? <ShareBody connectionId={connectionId} /> : null}
@@ -258,6 +262,8 @@ function ShareBody({ connectionId }: { connectionId: string }) {
         ) : null}
       </section>
 
+      <GroupsSection connectionId={connectionId} canShare={canShare} held={sharing.data.groups ?? []} />
+
       <section>
         <h3 className="mb-2 text-sm font-semibold">General access</h3>
         <div className="flex items-start gap-3 rounded-lg border px-3 py-2.5">
@@ -294,6 +300,164 @@ function ShareBody({ connectionId }: { connectionId: string }) {
         </div>
       </section>
     </div>
+  )
+}
+
+function GroupsSection({
+  connectionId,
+  canShare,
+  held,
+}: {
+  connectionId: string
+  canShare: boolean
+  held: ContextShareGroupGrant[]
+}) {
+  const options = useShareableGroups(connectionId, canShare)
+  const shareGroup = useShareContextWithGroup(connectionId)
+  const unshareGroup = useUnshareContextWithGroup(connectionId)
+  const [groupId, setGroupId] = useState('')
+  const [level, setLevel] = useState<ContextAccessLevel>('view')
+  const [pendingGroup, setPendingGroup] = useState<number | null>(null)
+
+  const heldIds = new Set(held.map((g) => g.groupId))
+  const candidates = (options.data ?? []).filter((g) => !heldIds.has(g.groupId))
+  const chosen = candidates.find((g) => String(g.groupId) === groupId) ?? null
+
+  const add = async () => {
+    if (!chosen) return
+    try {
+      await shareGroup.mutateAsync({ groupId: chosen.groupId, level })
+      notify.success(
+        `${chosen.name} ${CONTEXT_ACCESS_LABELS[level].toLowerCase()} this context.`,
+        'Every active member of the group has it now.'
+      )
+      setGroupId('')
+    } catch (err) {
+      notify.failure('share this context with the group', err)
+    }
+  }
+
+  const change = async (group: ContextShareGroupGrant, next: ContextAccessLevel) => {
+    setPendingGroup(group.groupId)
+    try {
+      await shareGroup.mutateAsync({ groupId: group.groupId, level: next })
+      notify.success(`${group.name} now ${CONTEXT_ACCESS_LABELS[next].toLowerCase()} this context.`)
+    } catch (err) {
+      notify.failure('change that access', err)
+    } finally {
+      setPendingGroup(null)
+    }
+  }
+
+  const remove = async (group: ContextShareGroupGrant) => {
+    setPendingGroup(group.groupId)
+    try {
+      await unshareGroup.mutateAsync(group.groupId)
+      notify.success(`${group.name} can no longer open this context.`)
+    } catch (err) {
+      notify.failure('remove that access', err)
+    } finally {
+      setPendingGroup(null)
+    }
+  }
+
+  const memberLabel = (count: number) => `${count} ${count === 1 ? 'member' : 'members'}`
+
+  return (
+    <section>
+      <h3 className="mb-2 text-sm font-semibold">Groups with access</h3>
+      {canShare ? (
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <Select value={groupId} onValueChange={setGroupId} disabled={shareGroup.isPending}>
+            <SelectTrigger className="h-8 min-w-0 flex-1" aria-label="Choose a group">
+              <SelectValue
+                placeholder={
+                  options.isPending
+                    ? 'Loading groups…'
+                    : candidates.length
+                      ? 'Choose a group…'
+                      : 'No more groups to add'
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {candidates.map((g) => (
+                <SelectItem key={g.groupId} value={String(g.groupId)}>
+                  {g.name} · {memberLabel(g.memberCount)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <LevelSelect
+            value={level}
+            onChange={setLevel}
+            disabled={shareGroup.isPending}
+            compact
+            label="Access for the group"
+          />
+          <Button size="sm" onClick={() => void add()} disabled={!chosen || shareGroup.isPending}>
+            {shareGroup.isPending && pendingGroup === null ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+            ) : null}
+            Share
+          </Button>
+        </div>
+      ) : null}
+      {held.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No group has been added yet.</p>
+      ) : (
+        <ul className="max-h-48 divide-y overflow-y-auto rounded-lg border">
+          {held.map((g) => {
+            const pending = pendingGroup === g.groupId
+            return (
+              <li key={g.groupId} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+                    <UsersRound className="size-4" aria-hidden />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">
+                      {g.name}
+                      {!g.active ? (
+                        <span className="ml-1.5 text-xs font-normal text-muted-foreground">(paused)</span>
+                      ) : null}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">{memberLabel(g.memberCount)}</span>
+                  </span>
+                </span>
+                {canShare ? (
+                  <span className="flex shrink-0 items-center gap-1">
+                    <LevelSelect
+                      value={g.level}
+                      onChange={(next) => next !== g.level && void change(g, next)}
+                      disabled={pending}
+                      compact
+                      label={`Access for ${g.name}`}
+                    />
+                    <Hint label={`Remove ${g.name}`}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 text-muted-foreground hover:text-destructive"
+                        disabled={pending}
+                        aria-label={`Remove ${g.name}`}
+                        onClick={() => void remove(g)}
+                      >
+                        {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <X className="size-4" aria-hidden />}
+                      </Button>
+                    </Hint>
+                  </span>
+                ) : (
+                  <Badge variant="outline" className="shrink-0 font-medium">
+                    {CONTEXT_ACCESS_LABELS[g.level]}
+                  </Badge>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
   )
 }
 

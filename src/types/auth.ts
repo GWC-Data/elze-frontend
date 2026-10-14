@@ -8,7 +8,10 @@ export interface AuthUser {
   email: string
   displayName: string | null
   role: RoleName
-  customRoleId?: number | null
+  roleId?: string | null
+  roleName?: string | null
+  roleKind?: RoleKind | null
+  customRoleId?: string | null
   customRoleName?: string | null
   status: UserStatus
   mustChangePassword: boolean
@@ -19,6 +22,8 @@ export interface AuthUser {
 }
 
 export type RoleName = 'SUPER_ADMIN' | 'COMPANY_ADMIN' | 'USER'
+
+export type RoleKind = 'system' | 'company_default' | 'custom'
 
 export type AuthStatus =
   | 'RESTORING'

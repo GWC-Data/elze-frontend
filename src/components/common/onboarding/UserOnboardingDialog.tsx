@@ -27,6 +27,7 @@ import { CompanyRoleSelect } from '@/components/common/roles/CompanyRoleSelect'
 import { ROLE_LABELS } from '@/constants/labels'
 import { ReviewRow, Stepper } from '@/components/common/onboarding/Stepper'
 import { notify } from '@/lib/notify'
+import { SHOW_ANALYTICS } from '@/constants/sections'
 import type { AdminUser, CompanyOption } from '@/types/admin'
 import type { RoleName } from '@/types/auth'
 
@@ -53,7 +54,7 @@ export function UserOnboardingDialog({
   const [displayName, setDisplayName] = useState('')
   const [role, setRole] = useState<RoleName>('USER')
   const [companyId, setCompanyId] = useState<number | null>(null)
-  const [customRoleId, setCustomRoleId] = useState<number | null>(null)
+  const [customRoleId, setCustomRoleId] = useState<string | null>(null)
 
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -211,7 +212,9 @@ export function UserOnboardingDialog({
                   />
                 ) : null}
 
-                <FormNotice message="Dashboard access is granted separately, after the account exists. A new person starts with none." />
+                {SHOW_ANALYTICS && (
+                  <FormNotice message="Dashboard access is granted separately, after the account exists. A new person starts with none." />
+                )}
 
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setStep(1)}>

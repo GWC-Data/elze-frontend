@@ -24,6 +24,8 @@ import { ChipSelect } from '@/components/common/ChipSelect'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { TextField } from '@/components/common/Fields'
 import { GrantPicker } from '@/components/common/people/GrantPicker'
+import { GroupContexts } from '@/components/common/groups/GroupContexts'
+import { SHOW_ANALYTICS } from '@/constants/sections'
 import { EmptyState, ErrorState, InlineLoading, TableSkeleton } from '@/components/common/States'
 import { notify } from '@/lib/notify'
 import { Button } from '@/components/ui/button'
@@ -62,6 +64,7 @@ export default function GroupsPage() {
   const [picked, setPicked] = useState<number | null>(null)
   const selectedId =
     picked !== null && rows.some((group) => group.id === picked) ? picked : (rows[0]?.id ?? null)
+  const selectedGroup = rows.find((group) => group.id === selectedId) ?? null
 
   const confirmDelete = async () => {
     if (!deleting) return
@@ -84,7 +87,7 @@ export default function GroupsPage() {
     <Page>
       <PageHeader
         title="Groups"
-        description="Give a dashboard to a whole team at once. Everyone active in a group gets what the group has."
+        description="Share published contexts with a whole team at once. Everyone active in a group gets what the group has."
         actions={
           can('group.create') && (
             <Button onClick={() => setCreating(true)}>
@@ -107,7 +110,7 @@ export default function GroupsPage() {
         <Section flush>
           <EmptyState
             title="No groups yet"
-            body="A group is the tidiest way to give the same dashboards to a whole team — add people once, and grant access once."
+            body="A group is the tidiest way to share the same contexts with a whole team: add people once, and share once."
             icon={UsersRound}
             action={
               can('group.create') && (
@@ -169,7 +172,10 @@ export default function GroupsPage() {
                   if (group) setDeleting(group)
                 }}
               />
-              <GroupAccess groupId={selectedId} />
+              {selectedGroup && can('context.read') ? (
+                <GroupContexts key={selectedGroup.id} group={selectedGroup} />
+              ) : null}
+              {SHOW_ANALYTICS && <GroupAccess groupId={selectedId} />}
             </div>
           )}
         </div>
@@ -194,7 +200,7 @@ export default function GroupsPage() {
         body="The group is removed along with its membership."
         consequence={
           deleting && deleting.memberCount > 0
-            ? `${deleting.memberCount} ${deleting.memberCount === 1 ? 'person' : 'people'} will lose any dashboard access they had only through this group.`
+            ? `${deleting.memberCount} ${deleting.memberCount === 1 ? 'person' : 'people'} will lose any access they had only through this group.`
             : undefined
         }
         confirmLabel="Delete group"
@@ -501,7 +507,7 @@ function CreateGroupDialog({
         <DialogHeader>
           <DialogTitle>New group</DialogTitle>
           <DialogDescription>
-            Members and dashboard access are set once it exists.
+            Members and shared contexts are set once it exists.
           </DialogDescription>
         </DialogHeader>
 

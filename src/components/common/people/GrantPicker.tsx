@@ -88,8 +88,8 @@ export function GrantPicker({
           </SelectTrigger>
           <SelectContent>
             {levelOptions.map((option) => (
-              <SelectItem key={option.id} value={option.id}>
-                {ACCESS_LEVEL_LABELS[option.id] ?? option.id}
+              <SelectItem key={option.id} value={option.key}>
+                {ACCESS_LEVEL_LABELS[option.key] ?? option.label}
               </SelectItem>
             ))}
           </SelectContent>

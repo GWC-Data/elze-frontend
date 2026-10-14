@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
+import { isHiddenPermission } from '@/constants/sections'
 import type { PermissionDef, Role } from '@/types/admin'
 import type { RoleName } from '@/types/auth'
 
@@ -116,7 +117,7 @@ export default function RolesPage() {
 function byArea(catalogue: PermissionDef[]): Array<[string, PermissionDef[]]> {
   const areas = new Map<string, PermissionDef[]>()
   for (const permission of catalogue) {
-    const area = permission.id.split('.')[0]
+    const area = permission.key.split('.')[0]
     const existing = areas.get(area)
     if (existing) existing.push(permission)
     else areas.set(area, [permission])
@@ -151,15 +152,18 @@ function RolePermissions({
   onRetryCatalogue: () => void
   editable: boolean
 }) {
-  const permissions = useAsync(() => fetchRolePermissions(role.name), [role.name])
+  const permissions = useAsync(() => fetchRolePermissions(role.id), [role.id])
 
   const [edited, setEdited] = useState<string[] | null>(null)
   const [pending, setPending] = useState(false)
 
-  const saved = permissions.data?.permissions ?? []
+  const saved = permissions.data?.permissionIds ?? []
   const held = edited ?? saved
 
-  const areas = useMemo(() => byArea(catalogue), [catalogue])
+  const areas = useMemo(
+    () => byArea(catalogue.filter((permission) => !isHiddenPermission(permission.key))),
+    [catalogue]
+  )
 
   const isPlatformRole = role.scope === 'platform'
   const readOnly = !editable || !permissions.data?.editable
@@ -167,12 +171,12 @@ function RolePermissions({
   const save = async () => {
     setPending(true)
     try {
-      await saveRolePermissions(role.name, held)
+      await saveRolePermissions(role.id, held)
       setEdited(null)
       permissions.reload()
       notify.success(
         'Permissions updated.',
-        'They apply on each holder’s next request — nobody has to sign in again.'
+        'They apply on each holder’s next request, so nobody has to sign in again.'
       )
     } catch (err) {
       notify.failure('save these permissions', err)
@@ -212,7 +216,7 @@ function RolePermissions({
       )}
       {!isPlatformRole && editable && (
         <div className="mb-4">
-          <FormNotice message="Permissions marked “platform only” cannot be given to a company role — they would let a customer’s administrator act outside their own company. The server refuses them too." />
+          <FormNotice message="Permissions marked “platform only” cannot be given to a company role, because they would let a customer’s administrator act outside their own company. The server refuses them too." />
         </div>
       )}
       {!editable && (

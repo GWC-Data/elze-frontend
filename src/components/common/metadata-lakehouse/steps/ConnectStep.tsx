@@ -2,26 +2,45 @@ import { useState } from 'react'
 import { StepFrame } from '@/components/common/metadata-lakehouse/StepFrame'
 import { QueryBoundary, TableSkeleton } from '@/components/common/metadata-lakehouse/DataStates'
 import { endpoints } from '@/api/endpoints'
-import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
-import { formatRelativeTime, maskSecretHint } from '@/lib/format'
-import { connectorPresentation } from '@/lib/connectors'
-import { useConnection, useConnectors } from '@/hooks/useMetadataLakehouse'
+import { notify } from '@/lib/notify'
+import { accessAtLeast } from '@/lib/contextAccess'
+import { useConnection, useConnectors, useVerifyConnection } from '@/hooks/useMetadataLakehouse'
 import { useWorkflow } from '@/context/workflowContext'
-import type { Connector } from '@/types/metadataLakehouse'
+import type { Connection, Connector } from '@/types/metadataLakehouse'
 import { ConnectorGallery } from '@/components/common/metadata-lakehouse/steps/ConnectorGallery'
 import { ConnectionForm } from '@/components/common/metadata-lakehouse/steps/ConnectionForm'
+import { ConnectionOverview } from '@/components/common/metadata-lakehouse/steps/ConnectionOverview'
 
 export function ConnectStep() {
-  const { connectionId, setConnectionId, goToStep, readOnly } = useWorkflow()
-  if (readOnly && connectionId) return <ConnectedSummary connectionId={connectionId} />
+  const { connectionId, setConnectionId, goToStep } = useWorkflow()
+  if (connectionId) return <ConnectedSummary connectionId={connectionId} />
   return <ConnectForm connectionId={connectionId} setConnectionId={setConnectionId} goToStep={goToStep} />
 }
 
 function ConnectedSummary({ connectionId }: { connectionId: string }) {
+  const { readOnly, access } = useWorkflow()
   const connection = useConnection(connectionId)
+  const verify = useVerifyConnection()
+  const canVerify = !readOnly && accessAtLeast(access, 'edit')
+
+  const runVerify = async (c: Connection) => {
+    try {
+      await verify.mutateAsync(c.id)
+      notify.success(`${c.name} is still connected.`)
+    } catch (err) {
+      notify.failure(`verify ${c.name}`, err)
+    }
+  }
+
   return (
-    <StepFrame title="Connect a data source" description="The data source this context was built from.">
+    <StepFrame
+      title="Connect a data source"
+      description={
+        readOnly
+          ? 'The data source this context was built from.'
+          : 'This context reads from the data source below. Continue to the next step, or verify it again if its credentials have changed.'
+      }
+    >
       <QueryBoundary
         query={connection}
         step="Connect"
@@ -29,38 +48,14 @@ function ConnectedSummary({ connectionId }: { connectionId: string }) {
         context="load the connection"
         loading={<TableSkeleton rows={2} columns={3} />}
       >
-        {(c) => {
-          const presentation = connectorPresentation(c.provider)
-          const connected = c.status === 'connected'
-          return (
-            <div className="flex items-start gap-3 rounded-xl border bg-card p-4">
-              <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-md', presentation.accentClass)}>
-                <presentation.icon className="size-5" aria-hidden />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold">{c.name}</span>
-                  <Badge
-                    variant="outline"
-                    className={
-                      connected
-                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
-                        : 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300'
-                    }
-                  >
-                    {connected ? 'Connected' : 'Not working'}
-                  </Badge>
-                </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {c.provider} · {c.host} · {maskSecretHint(c.secretHint)}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Connected {formatRelativeTime(c.createdAt)} · verified {formatRelativeTime(c.lastVerifiedAt)}
-                </p>
-              </div>
-            </div>
-          )
-        }}
+        {(c) => (
+          <ConnectionOverview
+            connection={c}
+            canVerify={canVerify}
+            verifying={verify.isPending}
+            onVerify={() => void runVerify(c)}
+          />
+        )}
       </QueryBoundary>
     </StepFrame>
   )

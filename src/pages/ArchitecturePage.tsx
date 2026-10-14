@@ -16,6 +16,7 @@ import { useAuth } from '@/context/authContext'
 import { usePaths } from '@/hooks/usePaths'
 import { cn } from '@/lib/utils'
 import { ArchitectureFlow } from '@/components/common/overview/ArchitectureFlow'
+import { SHOW_ANALYTICS } from '@/constants/sections'
 
 const ArchitectureScene = lazy(() => import('@/components/common/overview/ArchitectureScene'))
 
@@ -75,7 +76,7 @@ export default function ArchitecturePage() {
               n={4}
               icon={CheckCircle2}
               title="Use everywhere"
-              body="Chat, agents and dashboards read the published context — the same definitions in every answer."
+              body="Chat and agents read the published context, so every answer uses the same definitions."
               to={paths.dataAnalyst()}
             />
           </ol>
@@ -84,9 +85,9 @@ export default function ArchitecturePage() {
         <section>
           <SectionTitle
             eyebrow="What you can do"
-            title="One source of truth, three ways to use it"
+            title={`One source of truth, ${SHOW_ANALYTICS ? 'three' : 'two'} ways to use it`}
           />
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <div className={cn('mt-8 grid gap-4', SHOW_ANALYTICS ? 'md:grid-cols-3' : 'md:grid-cols-2')}>
             <OutletCard
               icon={MessageSquare}
               title="Chat on Data"
@@ -101,19 +102,21 @@ export default function ArchitecturePage() {
               cta="Go to playbooks"
               to={paths.playbooks()}
             />
-            <OutletCard
-              icon={BarChart3}
-              title="BI"
-              body="Live dashboards built on the same definitions — shared with the right people, never out of step."
-              cta="View dashboards"
-              to={paths.dashboards}
-            />
+            {SHOW_ANALYTICS && (
+              <OutletCard
+                icon={BarChart3}
+                title="BI"
+                body="Live dashboards built on the same definitions, shared with the right people and never out of step."
+                cta="View dashboards"
+                to={paths.dashboards}
+              />
+            )}
           </div>
         </section>
 
         <p className="flex items-center justify-center gap-2 pb-2 text-xs text-muted-foreground">
           <Database className="size-3.5" aria-hidden />
-          Your data stays where it is — ELZE stores context about it, not copies of it.
+          Your data stays where it is. ELZE stores context about it, not copies of it.
         </p>
       </div>
     </div>

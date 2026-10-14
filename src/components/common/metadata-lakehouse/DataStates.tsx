@@ -126,7 +126,7 @@ function formatElapsed(seconds: number) {
   return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s`
 }
 
-export function BusyOverlay({ title, detail }: { title: string; detail?: ReactNode }) {
+export function BusyOverlay({ title, detail, action }: { title: string; detail?: ReactNode; action?: ReactNode }) {
   const seconds = useElapsedSeconds()
   return (
     <div
@@ -146,6 +146,7 @@ export function BusyOverlay({ title, detail }: { title: string; detail?: ReactNo
         <p className="mt-4 text-xs tabular-nums text-muted-foreground">
           Elapsed {formatElapsed(seconds)}
         </p>
+        {action ? <div className="mt-4">{action}</div> : null}
       </div>
     </div>
   )
@@ -212,7 +213,7 @@ export function EndpointPendingState({
     >
       <p>
         {detail ??
-          'This step renders entirely from the backend. Once the endpoint below responds, it will fill in with real data — nothing on this screen is simulated in the meantime.'}
+          'This step renders entirely from the backend. Once the endpoint below responds, it will fill in with real data. Nothing on this screen is simulated in the meantime.'}
       </p>
       <code className="mt-3 inline-block rounded bg-muted px-2 py-1 font-mono text-xs text-foreground">
         {endpoint}

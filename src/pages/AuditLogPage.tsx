@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { SHOW_ANALYTICS } from '@/constants/sections'
 import type { AuditLogEntry, AuditLogPage as AuditPage, AuditScope } from '@/types/admin'
 
 const HEADINGS: Record<AuditScope, { title: string; description: string; empty: string }> = {
@@ -29,7 +30,7 @@ const HEADINGS: Record<AuditScope, { title: string; description: string; empty: 
   },
   company: {
     title: 'Audit log',
-    description: 'Everything done in your company: sign-ins, people, groups, dashboards and the Metadata Lakehouse.',
+    description: 'Everything done in your company: sign-ins, people, groups, roles and the Metadata Lakehouse.',
     empty: 'Entries appear here as people in your company sign in and make changes.',
   },
   self: {
@@ -62,7 +63,7 @@ const CATEGORY_OPTIONS: { value: AuditCategory; label: string }[] = [
   { value: 'lakehouse', label: 'Metadata Lakehouse' },
   { value: 'auth', label: 'Sign-in & sessions' },
   { value: 'people', label: 'People, groups & roles' },
-  { value: 'dashboards', label: 'Dashboards & access' },
+  ...(SHOW_ANALYTICS ? [{ value: 'dashboards' as AuditCategory, label: 'Dashboards & access' }] : []),
   { value: 'companies', label: 'Companies' },
 ]
 

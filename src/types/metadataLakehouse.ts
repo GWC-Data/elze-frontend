@@ -38,8 +38,30 @@ export interface ContextSharePerson {
   displayName: string | null
 }
 
+export interface ContextLevelDef {
+  id: string
+  key: ContextAccessLevel
+  rank: number
+  label: string
+  description: string
+}
+
 export interface ContextShareGrant extends ContextSharePerson {
   level: ContextAccessLevel
+  levelId: string
+  grantedAt: string
+  active: boolean
+}
+
+export interface ContextShareGroup {
+  groupId: number
+  name: string
+  memberCount: number
+}
+
+export interface ContextShareGroupGrant extends ContextShareGroup {
+  level: ContextAccessLevel
+  levelId: string
   grantedAt: string
   active: boolean
 }
@@ -47,8 +69,21 @@ export interface ContextShareGrant extends ContextSharePerson {
 export interface ContextSharing {
   owner: ContextOwner | null
   generalAccess: GeneralAccess
+  levels: ContextLevelDef[]
   people: ContextShareGrant[]
-  you: { level: ContextAccessLevel; isOwner: boolean; canShare: boolean }
+  groups?: ContextShareGroupGrant[]
+  you: { level: ContextAccessLevel; levelId: string | null; isOwner: boolean; canShare: boolean }
+}
+
+export interface GroupSharedContext {
+  connectionId: string
+  connectionName: string
+  provider: string
+  name: string
+  publishedVersion: number | null
+  level: ContextAccessLevel
+  levelId: string
+  grantedAt: string
 }
 
 export interface Connection {
@@ -321,12 +356,14 @@ export interface ReviewQueue {
   counts: Record<string, number>
   total: number
   matched: number
+  highConfidence?: { threshold: number; pending: number }
 }
 
 export interface ReviewQuery {
   type?: string
   status?: string
   search?: string
+  minConfidence?: number
   page: number
   pageSize: number
 }

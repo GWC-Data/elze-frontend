@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Clock, Columns3, HardDrive, Layers, Loader2, Search, Sparkles, Table2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { notify } from '@/lib/notify'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { StepFrame } from '@/components/common/metadata-lakehouse/StepFrame'
+import { StopExtractionButton } from '@/components/common/metadata-lakehouse/StopExtraction'
+import { reportExtractionError } from '@/components/common/metadata-lakehouse/reportExtractionError'
 import {
   EmptyState,
   EndpointPendingState,
@@ -65,7 +66,7 @@ export function ProfileStep() {
       await runExtraction.mutateAsync({ datasetIds })
       next()
     } catch (err) {
-      notify.failure('run the context extraction', err)
+      reportExtractionError(err)
     }
   }
 
@@ -106,7 +107,8 @@ export function ProfileStep() {
       pendingLabel="Analysing…"
       pendingOverlay={{
         title: 'Analysing your data with AI',
-        detail: `Reading ${datasetIds.length} dataset${datasetIds.length === 1 ? '' : 's'} and generating the business glossary, metrics and relationships. This can take a few minutes — keep this tab open.`,
+        detail: `Reading ${datasetIds.length} dataset${datasetIds.length === 1 ? '' : 's'} and generating the business glossary, metrics and relationships. This can take a few minutes. Keep this tab open.`,
+        action: <StopExtractionButton run={runExtraction} />,
       }}
       refreshing={overview.isFetching && !overview.isPending}
       nextDisabled={datasetIds.length === 0}
@@ -116,7 +118,7 @@ export function ProfileStep() {
           await runExtraction.mutateAsync({ datasetIds })
           return true
         } catch (err) {
-          notify.failure('run the context extraction', err)
+          reportExtractionError(err)
           return false
         }
       }}

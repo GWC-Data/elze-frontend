@@ -6,6 +6,7 @@ import { Page, PageHeader, Section } from '@/components/common/Page'
 import { CardGridSkeleton, ErrorState } from '@/components/common/States'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SHOW_ANALYTICS } from '@/constants/sections'
 
 function duration(seconds: number): string {
   if (seconds % 86400 === 0) {
@@ -96,15 +97,19 @@ export default function PlatformSettingsPage() {
                 value={settings.data.email.provider.toUpperCase()}
                 hint={`Sending as ${settings.data.email.from}`}
               />
-              <Row
-                label="Dashboards in the registry"
-                value={String(settings.data.engine.dashboardCount)}
-              />
-              <Row
-                label="Queries per dashboard request"
-                value={String(settings.data.engine.queryConcurrency)}
-                hint="How many of a dashboard's cards are queried at once."
-              />
+              {SHOW_ANALYTICS && (
+                <>
+                  <Row
+                    label="Dashboards in the registry"
+                    value={String(settings.data.engine.dashboardCount)}
+                  />
+                  <Row
+                    label="Queries per dashboard request"
+                    value={String(settings.data.engine.queryConcurrency)}
+                    hint="How many of a dashboard's cards are queried at once."
+                  />
+                </>
+              )}
             </div>
           </Section>
 

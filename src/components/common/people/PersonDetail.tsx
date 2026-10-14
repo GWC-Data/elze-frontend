@@ -24,6 +24,7 @@ import { FormNotice } from '@/components/common/Fields'
 import { RoleSelect } from '@/components/common/RoleSelect'
 import { CompanyRoleSelect } from '@/components/common/roles/CompanyRoleSelect'
 import { GrantPicker } from '@/components/common/people/GrantPicker'
+import { ExtraPermissionsSection } from '@/components/common/people/ExtraPermissionsSection'
 import { EmptyState, ErrorState, InlineLoading } from '@/components/common/States'
 import { notify } from '@/lib/notify'
 import { Button } from '@/components/ui/button'
@@ -36,10 +37,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { AccessLevel, RoleName } from '@/types/auth'
-import type { AdminUser } from '@/types/admin'
+import type { AdminUser, UserPermissions } from '@/types/admin'
 
 export interface PersonActions {
-  updateRole: (role: RoleName, customRoleId?: number | null) => Promise<unknown>
+  updateRole: (role: RoleName, customRoleId?: string | null) => Promise<unknown>
+  loadPermissions: () => Promise<UserPermissions>
+  savePermissions: (permissionIds: string[]) => Promise<UserPermissions>
   activate: () => Promise<unknown>
   deactivate: () => Promise<unknown>
   resendInvitation: () => Promise<unknown>
@@ -60,6 +63,13 @@ export function PersonDetail({
   return (
     <div className="space-y-6">
       <AccountSection person={person} isSelf={isSelf} actions={actions} onChanged={onChanged} />
+      {person.companyId !== null && person.role === 'USER' ? (
+        <ExtraPermissionsSection
+          reloadKey={`${person.id}:${person.roleId ?? ''}`}
+          load={actions.loadPermissions}
+          save={actions.savePermissions}
+        />
+      ) : null}
       {can('access.read') && <AccessSection person={person} />}
       {can('scope.read') && <ScopeSection userId={person.id} />}
     </div>
@@ -83,7 +93,7 @@ function AccountSection({
 
   const [chosenRole, setChosenRole] = useState<RoleName | null>(null)
   const role = chosenRole ?? person.role
-  const [chosenCustom, setChosenCustom] = useState<{ id: number | null } | null>(null)
+  const [chosenCustom, setChosenCustom] = useState<{ id: string | null } | null>(null)
   const customRoleId = chosenCustom ? chosenCustom.id : person.customRoleId ?? null
   const unchanged = role === person.role && customRoleId === (person.customRoleId ?? null)
 
@@ -111,7 +121,7 @@ function AccountSection({
     >
       {isSelf && (
         <div className="mb-4">
-          <FormNotice message="This is your own account. Change it from your profile — an administrator who can demote themselves can lock everyone out." />
+          <FormNotice message="This is your own account. Change it from your profile. An administrator who can demote themselves can lock everyone out." />
         </div>
       )}
       {!can('user.update') && !isSelf && (
@@ -483,7 +493,7 @@ function ScopeSection({ userId }: { userId: number }) {
         <>
           {!enforced && (
             <div className="mb-5">
-              <FormNotice message="These selections are saved but not yet applied — queries currently read the full table regardless. They will take effect when row-level filtering is switched on." />
+              <FormNotice message="These selections are saved but not yet applied. Queries currently read the full table regardless. They will take effect when row-level filtering is switched on." />
             </div>
           )}
 

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { restoreSession, setSessionLostHandler } from '@/api/client'
 import { fetchProfile, login as loginRequest, logout as logoutRequest } from '@/api/auth.api'
 import { notify } from '@/lib/notify'
+import { isHiddenPermission } from '@/constants/sections'
 import { AuthContext } from '@/context/authContext'
 import type { AuthState } from '@/context/authContext'
 import type { AccessibleDashboard, AuthStatus, AuthUser, SessionResponse } from '@/types/auth'
@@ -32,12 +33,22 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setSessionLostHandler((reason) => {
-      if (statusRef.current === 'RESTORING' || statusRef.current === 'UNAUTHENTICATED') return
+      const current = statusRef.current
+      if (
+        current === 'RESTORING' ||
+        current === 'UNAUTHENTICATED' ||
+        current === 'SESSION_EXPIRED' ||
+        current === 'ACCOUNT_DISABLED'
+      ) {
+        return
+      }
 
       if (reason === 'disabled') {
+        statusRef.current = 'ACCOUNT_DISABLED'
         clearSession('ACCOUNT_DISABLED')
         notify.error('Your access has been withdrawn.', 'Contact your administrator.')
       } else {
+        statusRef.current = 'SESSION_EXPIRED'
         clearSession('SESSION_EXPIRED')
         notify.warning('Your session has expired.', 'Sign in again to continue.')
       }
@@ -117,7 +128,8 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       adoptSession,
       refresh: applyProfile,
-      can: (permission: string) => Boolean(user?.permissions?.includes(permission)),
+      can: (permission: string) =>
+        !isHiddenPermission(permission) && Boolean(user?.permissions?.includes(permission)),
       hasFeature: (feature: string) =>
         user?.role === 'SUPER_ADMIN' || Boolean(user?.features?.includes(feature)),
     }),

@@ -5,10 +5,12 @@ import {
   ArrowRight,
   CheckCircle2,
   ExternalLink,
+  Info,
   Loader2,
-  ShieldCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Dialog,
   DialogContent,
@@ -128,27 +130,25 @@ export function ConnectionForm({
               label="Company"
               help="A connection belongs to one company. Platform accounts have none of their own."
             >
-              <select
-                id="cred-company"
-                value={companyId}
-                onChange={(e) => setCompanyId(e.target.value)}
-                disabled={locked}
-                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <option value="">Select a company…</option>
-                {(companies.data ?? []).map((company) => (
-                  <option key={company.id} value={String(company.id)}>
-                    {company.name}
-                  </option>
-                ))}
-              </select>
+              <Select value={companyId} onValueChange={setCompanyId} disabled={locked}>
+                <SelectTrigger id="cred-company" className="w-full data-[size=default]:h-10">
+                  <SelectValue placeholder="Select a company…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(companies.data ?? []).map((company) => (
+                    <SelectItem key={company.id} value={String(company.id)}>
+                      {company.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
           ) : null}
 
           {fields.length === 0 ? (
             <p className="rounded-lg border border-dashed px-3 py-8 text-center text-sm text-muted-foreground">
               This connector declares no credential fields. That is a backend configuration
-              problem — a provider marked available must describe its own form.
+              problem: a provider marked available must describe its own form.
             </p>
           ) : (
             <div className="space-y-6">
@@ -231,12 +231,7 @@ export function ConnectionForm({
           ) : null}
         </div>
 
-        <DialogFooter className="flex-row items-center gap-3 border-t pt-4 sm:justify-between">
-          <p className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
-            <ShieldCheck className="size-3.5 shrink-0" aria-hidden />
-            Sent once, encrypted by the backend, never stored in the browser.
-          </p>
-
+        <DialogFooter className="flex-row items-center gap-3 border-t pt-4 sm:justify-end">
           <div className="ml-auto flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={onCancel}>
               Cancel
@@ -283,16 +278,31 @@ function Field({
 }) {
   return (
     <div className={cn('space-y-2', className)}>
-      <div className="flex items-baseline justify-between gap-3">
-        <Label htmlFor={id} className="text-sm font-medium">
-          {label}
-        </Label>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5">
+          <Label htmlFor={id} className="text-sm font-medium">
+            {label}
+          </Label>
+          {help ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`About ${label}`}
+                  className="rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Info className="size-3.5" aria-hidden />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[260px]">
+                <p className="text-xs leading-relaxed">{help}</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+        </div>
         {action}
       </div>
       {children}
-      {help ? (
-        <p className="text-xs leading-relaxed text-muted-foreground">{help}</p>
-      ) : null}
     </div>
   )
 }

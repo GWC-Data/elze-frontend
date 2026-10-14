@@ -22,14 +22,15 @@ export interface Company {
   userCount?: number
   dashboardCount?: number
   pendingCount?: number
-  features?: FeatureId[]
+  features?: FeatureKey[]
   admin?: AdminUser
 }
 
-export type FeatureId = 'metadata_lakehouse' | 'data_analyst' | 'agents' | 'dashboards'
+export type FeatureKey = 'metadata_lakehouse' | 'data_analyst' | 'agents' | 'dashboards'
 
 export interface FeatureDef {
-  id: FeatureId
+  id: string
+  key: FeatureKey
   label: string
   description: string
   locked: boolean
@@ -54,7 +55,7 @@ export interface CompanyOption {
 export interface NewCompany {
   name: string
   slug?: string
-  features?: FeatureId[]
+  featureIds?: string[]
   admin: {
     username: string
     email: string
@@ -69,7 +70,9 @@ export interface UserListItem {
   username: string
   email: string
   role: RoleName
-  customRoleId?: number
+  roleId?: string | null
+  roleName?: string | null
+  customRoleId?: string
   customRoleName?: string | null
   status: UserStatus
   displayName?: string
@@ -85,14 +88,17 @@ export interface UserOption {
 
 export interface PermissionDef {
   id: string
+  key: string
   label: string
   description: string
   platformOnly: boolean
-  feature?: FeatureId | null
+  adminOnly?: boolean
+  feature?: FeatureKey | null
+  featureId?: string | null
 }
 
 export interface RolePermissionOption extends PermissionDef {
-  feature: FeatureId | null
+  feature: FeatureKey | null
   featureEnabled: boolean
   assignable: boolean
   adminOnly: boolean
@@ -100,15 +106,15 @@ export interface RolePermissionOption extends PermissionDef {
 
 export interface RolePermissionOptions {
   companyId: number
-  features: FeatureId[]
+  features: FeatureKey[]
   permissions: RolePermissionOption[]
 }
 
 export interface CompanyRole {
-  id: number
+  id: string
   name: string
   description: string | null
-  permissions: string[]
+  permissionIds: string[]
   userCount: number
   createdAt: string | null
   updatedAt: string | null
@@ -117,9 +123,10 @@ export interface CompanyRole {
 }
 
 export interface BuiltInCompanyRole {
+  id: string
   name: RoleName
   label: string
-  permissions: string[]
+  permissionIds: string[]
   userCount: number
   editable: boolean
   customized: boolean
@@ -129,7 +136,7 @@ export interface BuiltInCompanyRole {
 
 export interface CompanyRoles {
   companyId: number
-  features: FeatureId[]
+  features: FeatureKey[]
   builtIn: BuiltInCompanyRole[]
   custom: CompanyRole[]
 }
@@ -137,27 +144,43 @@ export interface CompanyRoles {
 export interface CompanyRoleInput {
   name: string
   description?: string | null
-  permissions: string[]
+  permissionIds: string[]
   companyId?: number
 }
 
 export interface AccessLevelDef {
-  id: AccessLevel
+  id: string
+  key: AccessLevel
+  rank: number
+  label: string
   description: string
 }
 
 export interface Role {
+  id: string
   name: RoleName
+  label: string
   scope: 'platform' | 'company'
   description: string | null
   userCount: number
 }
 
 export interface RolePermissions {
+  id: string
   role: RoleName
+  label: string
   scope: 'platform' | 'company'
   editable: boolean
-  permissions: string[]
+  permissionIds: string[]
+}
+
+export interface UserPermissions {
+  userId: number
+  role: { id: string | null; name: string | null; tier: RoleName; kind: string | null }
+  rolePermissionIds: string[]
+  extraPermissionIds: string[]
+  editable: boolean
+  options: RolePermissionOption[]
 }
 
 export interface Group {
@@ -185,6 +208,7 @@ export interface UserGrant {
   dashboardId: string
   dashboardTitle: string | null
   level: AccessLevel
+  levelId: string
   origin: 'direct' | 'group'
   groupId?: number
   groupName?: string
@@ -195,6 +219,7 @@ export interface DashboardGrants {
   you?: {
     userId: number
     level: AccessLevel
+    levelId: string | null
     administrator: boolean
     mayRevoke: boolean
   }
@@ -203,18 +228,20 @@ export interface DashboardGrants {
     username: string
     email: string
     level: AccessLevel
+    levelId: string
   }>
   groups: Array<{
     groupId: number
     groupName: string
     level: AccessLevel
+    levelId: string
     active: boolean
   }>
 }
 
 export interface GroupDashboards {
   available: Array<{ id: string; title: string | null }>
-  held: Array<{ id: string; title: string | null; level: AccessLevel }>
+  held: Array<{ id: string; title: string | null; level: AccessLevel; levelId: string | null }>
 }
 
 export interface ScopeDimension {
@@ -267,6 +294,8 @@ export interface PlatformOverview {
   groups: number
   assignments: number
   dashboards: number
+  factsGenerated?: number | null
+  factsPending?: number | null
 }
 
 export interface WorkspaceOverview {
@@ -277,6 +306,8 @@ export interface WorkspaceOverview {
   groupsActive: number
   dashboards: number
   dashboardsGranted: number
+  factsGenerated?: number | null
+  factsPending?: number | null
 }
 
 export interface PlatformSettings {

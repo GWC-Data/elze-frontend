@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { PlatformShell, WorkspaceShell } from '@/layouts/AppShell'
 import { InlineLoading } from '@/components/common/States'
 import { LegacyContextRedirect, LoginRoute, RequirePermission, RootRedirect } from '@/router/guards'
+import { SHOW_AGENT_LIBRARY, SHOW_ANALYTICS } from '@/constants/sections'
 
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
 const ActivatePage = lazy(() => import('@/pages/ActivatePage'))
@@ -53,6 +54,19 @@ function page<P extends object>(
 interface RouteDef {
   path: string
   element: ReactElement
+}
+
+const HIDDEN_ROUTES: RegExp[] = [
+  ...(SHOW_ANALYTICS ? [] : [/^\/?dashboards(\/|$)/, /^\/?data$/, /^\/team\/access$/]),
+  ...(SHOW_AGENT_LIBRARY ? [] : [/^\/?agents(\/|$)/]),
+]
+
+function withHiddenRoutes(routes: RouteDef[], home: string): RouteDef[] {
+  return routes.map((route) =>
+    HIDDEN_ROUTES.some((pattern) => pattern.test(route.path))
+      ? { path: route.path, element: <Navigate to={home} replace /> }
+      : route
+  )
 }
 
 function sharedRoutes(prefix: string): RouteDef[] {
@@ -114,14 +128,14 @@ export function AppRoutes() {
 
       <Route path="/platform" element={<PlatformShell />}>
         <Route index element={page(OverviewPage)} />
-        {platformRoutes.map((r) => (
+        {withHiddenRoutes(platformRoutes, '/platform').map((r) => (
           <Route key={r.path} path={r.path} element={r.element} />
         ))}
         <Route path="*" element={page(NotFoundPage)} />
       </Route>
 
       <Route element={<WorkspaceShell />}>
-        {workspaceRoutes.map((r) => (
+        {withHiddenRoutes(workspaceRoutes, '/workspace').map((r) => (
           <Route key={r.path} path={r.path} element={r.element} />
         ))}
         <Route path="*" element={page(NotFoundPage)} />

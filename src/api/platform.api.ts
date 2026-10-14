@@ -1,13 +1,11 @@
 import { del, get, patch, post, put } from '@/api/client'
 import { endpoints } from '@/api/endpoints'
 import { platformUsers } from '@/api/users.api'
-import type { RoleName } from '@/types/auth'
 import type {
   Company,
   CompanyFeatures,
   CompanyOption,
   FeatureDef,
-  FeatureId,
   DashboardSummary,
   ListQuery,
   NewCompany,
@@ -65,8 +63,8 @@ export function fetchCompanyFeatures(companyId: number): Promise<CompanyFeatures
   return get<CompanyFeatures>(endpoints.platform.companyFeatures(companyId))
 }
 
-export function saveCompanyFeatures(companyId: number, features: FeatureId[]): Promise<CompanyFeatures> {
-  return put<CompanyFeatures>(endpoints.platform.companyFeatures(companyId), { features })
+export function saveCompanyFeatures(companyId: number, featureIds: string[]): Promise<CompanyFeatures> {
+  return put<CompanyFeatures>(endpoints.platform.companyFeatures(companyId), { featureIds })
 }
 
 export function listCompanyDashboards(companyId: number): Promise<DashboardSummary[]> {
@@ -98,12 +96,12 @@ export function listPermissions(): Promise<PermissionDef[]> {
   return get<PermissionDef[]>(endpoints.platform.permissions)
 }
 
-export function fetchRolePermissions(name: RoleName): Promise<RolePermissions> {
-  return get<RolePermissions>(endpoints.platform.rolePermissions(name))
+export function fetchRolePermissions(roleId: string): Promise<RolePermissions> {
+  return get<RolePermissions>(endpoints.platform.rolePermissions(roleId))
 }
 
-export function saveRolePermissions(name: RoleName, permissions: string[]): Promise<RolePermissions> {
-  return put<RolePermissions>(endpoints.platform.rolePermissions(name), { permissions })
+export function saveRolePermissions(roleId: string, permissionIds: string[]): Promise<RolePermissions> {
+  return put<RolePermissions>(endpoints.platform.rolePermissions(roleId), { permissionIds })
 }
 
 export function fetchPlatformOverview(): Promise<PlatformOverview> {

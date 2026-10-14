@@ -75,7 +75,7 @@ const STEPS: Step[] = [
   {
     title: 'It starts with your data',
     caption:
-      'Connect a warehouse such as Domo. ELZE reads schemas, row counts, lineage and usage — your data never has to move.',
+      'Connect a warehouse such as Domo. ELZE reads schemas, row counts, lineage and usage, and your data never has to move.',
     nodes: ['data'],
     paths: [],
   },
@@ -96,7 +96,7 @@ const STEPS: Step[] = [
   {
     title: 'Context grounds the AI',
     caption:
-      'The AI reasons from approved context instead of guessing — so every answer uses your definitions, metrics and joins.',
+      'The AI reasons from approved context instead of guessing, so every answer uses your definitions, metrics and joins.',
     nodes: ['lake', 'ai'],
     paths: ['lake-ai'],
   },
@@ -110,7 +110,7 @@ const STEPS: Step[] = [
   {
     title: 'Trusted context, straight to the source',
     caption:
-      'Chat, agents and BI read published context directly from the lakehouse — the approved version, not a copy.',
+      'Chat, agents and BI read published context directly from the lakehouse: the approved version, not a copy.',
     nodes: ['lake', 'chat', 'agents', 'bi'],
     paths: ['lake-chat', 'lake-agents', 'lake-bi'],
   },

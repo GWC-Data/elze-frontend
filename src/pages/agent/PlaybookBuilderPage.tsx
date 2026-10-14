@@ -40,7 +40,7 @@ function PlaybookBuilderChat({ connectionId, sessionId }: { connectionId: string
       sessionId={sessionId}
       basePath={(sid) => paths.playbookBuilder(connectionId, sid)}
       emptyTitle="What playbook do you want to build?"
-      emptyBody="Describe the recurring report or analysis you need — let's turn it into a playbook."
+      emptyBody="Describe the recurring report or analysis you need, and we'll turn it into a playbook."
       placeholder="Describe the playbook you want to build…"
       loadSession={(sid) => getAdkSession(connectionId, AGENT, sid)}
       createSession={() => createPlaybookBuilderSession(connectionId)}

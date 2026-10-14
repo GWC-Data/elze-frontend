@@ -37,7 +37,7 @@ export function StepFrame({
   hideBack?: boolean
   footerNote?: ReactNode
   pendingLabel?: string
-  pendingOverlay?: { title: string; detail?: ReactNode }
+  pendingOverlay?: { title: string; detail?: ReactNode; action?: ReactNode }
   refreshing?: boolean
   scrollBody?: boolean
 }) {
@@ -109,7 +109,7 @@ export function StepFrame({
         <RefreshingBar active={refreshing && !busy} />
         {children}
         {busy && pendingOverlay && !readOnly ? (
-          <BusyOverlay title={pendingOverlay.title} detail={pendingOverlay.detail} />
+          <BusyOverlay title={pendingOverlay.title} detail={pendingOverlay.detail} action={pendingOverlay.action} />
         ) : null}
       </div>
     </div>

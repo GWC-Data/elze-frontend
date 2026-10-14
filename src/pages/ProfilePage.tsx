@@ -10,6 +10,7 @@ import { AccessLevelBadge, RoleBadge, StatusBadge } from '@/components/common/Ba
 import { EmptyState, ErrorState, InlineLoading } from '@/components/common/States'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SHOW_ANALYTICS } from '@/constants/sections'
 
 export default function ProfilePage() {
   const { user, dashboards, signOut } = useAuth()
@@ -115,7 +116,7 @@ export default function ProfilePage() {
           )}
         </Section>
 
-        {!isPlatform && (
+        {SHOW_ANALYTICS && !isPlatform && (
           <Section
             title="Your dashboards"
             description="What has been shared with you, and what you can do with each."

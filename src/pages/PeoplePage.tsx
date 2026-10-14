@@ -50,7 +50,7 @@ export default function PeoplePage({ scope }: { scope: PeopleScope }) {
     : {
         title: 'No colleagues yet',
         body: canCreate
-          ? 'Add your first colleague. They receive an email with a link to set their own password — you never handle a password for them.'
+          ? 'Add your first colleague. They receive an email with a link to set their own password, so you never handle a password for them.'
           : 'Nobody else has been added to this company yet.',
       }
 

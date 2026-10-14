@@ -8,7 +8,7 @@ type StepState = 'complete' | 'current' | 'locked' | 'upcoming'
 
 function stepHint(state: StepState, blockingLabel: string | null): string {
   if (state === 'current') return 'You are here.'
-  if (state === 'complete') return 'Completed — select to revisit this step.'
+  if (state === 'complete') return 'Completed. Select to revisit this step.'
   if (state === 'locked' && blockingLabel) {
     return `Complete “${blockingLabel}” to proceed to this step.`
   }
@@ -29,7 +29,7 @@ export function Stepper() {
   }
 
   return (
-    <nav aria-label="Metadata Lakehouse progress" className="w-full">
+    <nav aria-label="Metadata Lakehouse progress" className="@container w-full">
       <ol className="flex w-full items-center">
         {WORKFLOW_STEPS.map((s, i) => {
           const state = stateFor(i, s.id)
@@ -37,7 +37,7 @@ export function Stepper() {
           const hint = stepHint(state, state === 'locked' ? blockingLabel : null)
 
           return (
-            <li key={s.id} className="flex flex-1 items-center last:flex-none">
+            <li key={s.id} className="flex min-w-0 flex-auto items-center last:flex-none">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -48,6 +48,7 @@ export function Stepper() {
                     aria-label={`Step ${i + 1}: ${s.label}. ${hint}`}
                     className={cn(
                       'group flex items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors',
+                      state === 'current' ? 'shrink-0' : 'min-w-0',
                       reachable ? 'cursor-pointer' : 'cursor-not-allowed',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
                     )}
@@ -71,7 +72,12 @@ export function Stepper() {
                       )}
                     </span>
 
-                    <span className="hidden min-w-0 flex-col md:flex">
+                    <span
+                      className={cn(
+                        'min-w-0 flex-col',
+                        state === 'current' ? 'flex' : 'hidden @min-[900px]:flex'
+                      )}
+                    >
                       <span
                         className={cn(
                           'truncate text-xs font-medium leading-tight',
@@ -80,7 +86,7 @@ export function Stepper() {
                       >
                         {s.label}
                       </span>
-                      <span className="truncate text-[11px] leading-tight text-muted-foreground/70">
+                      <span className="hidden truncate text-[11px] leading-tight text-muted-foreground/70 @min-[1240px]:block">
                         {s.description}
                       </span>
                     </span>
@@ -96,7 +102,7 @@ export function Stepper() {
                 <span
                   aria-hidden
                   className={cn(
-                    'mx-2 h-px flex-1 transition-colors',
+                    'mx-2 h-px min-w-3 flex-1 transition-colors',
                     i < furthestIndex ? 'bg-primary/40' : 'bg-border'
                   )}
                 />

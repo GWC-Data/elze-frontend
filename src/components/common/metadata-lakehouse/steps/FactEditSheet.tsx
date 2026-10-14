@@ -163,7 +163,7 @@ function EditForm({
         {readOnly.length > 0 ? (
           <div className="space-y-2 rounded-lg border border-dashed p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Read-only — names, source values and structure
+              Read-only: names, source values and structure
             </p>
             <dl className="grid gap-x-4 gap-y-1.5 text-xs sm:grid-cols-[minmax(7rem,auto)_minmax(0,1fr)]">
               {readOnly.map(([key, value]) => (
