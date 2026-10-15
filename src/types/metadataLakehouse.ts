@@ -109,6 +109,37 @@ export interface PublishedConnection {
   name: string
 }
 
+export interface DraftHeadline {
+  name: string
+  version: number
+  label: string
+  step: string | null
+  updatedAt: string
+}
+
+export interface DraftConnection extends Omit<Connection, 'context' | 'published' | 'selectedDatasets'> {
+  draft: DraftHeadline | null
+}
+
+export interface DraftConnectionsPage {
+  items: DraftConnection[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface DraftConnectionsQuery {
+  page?: number
+  pageSize?: number
+  search?: string
+}
+
+export interface McpTarget {
+  id: string
+  name: string
+  published?: { name: string; label: string; publishedAt?: string | null } | null
+}
+
 export interface PublishedContextOption {
   id: string
   connectionId: string
@@ -168,11 +199,20 @@ export interface CreatedConnection {
   truncated: boolean
 }
 
-export interface DatasetListing {
+export interface DatasetPage {
   datasets: WarehouseDataset[]
+  page: number
+  pageSize: number
+  total: number | null
+  hasMore: boolean
+  cached: boolean
   fetchedAt: string
-  limit: number
-  truncated: boolean
+}
+
+export interface DatasetPageQuery {
+  page: number
+  pageSize: number
+  search: string
 }
 
 export interface WarehouseDataset {

@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Loader2, Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { errorMessage } from '@/api/client'
 import { usePaths } from '@/hooks/usePaths'
 import { useAsync } from '@/hooks/useAsync'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { Page, PageHeader, Section } from '@/components/common/Page'
 import {
   CardGridSkeleton,
@@ -16,12 +17,14 @@ import { notify } from '@/lib/notify'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
+import { SearchBox, SearchToolbar } from '@/components/common/SearchBox'
 import { cn } from '@/lib/utils'
 import { accessAtLeast } from '@/lib/contextAccess'
 import { getConnection } from '@/api/connection.api'
-import { fetchDatasets, saveSelection } from '@/api/dataset.api'
+import { fetchDatasetPage, saveSelection } from '@/api/dataset.api'
 import type { WarehouseDataset } from '@/types/metadataLakehouse'
+
+const PAGE_SIZE = 25
 
 export default function ConnectionDatasetsPage() {
   const { id = '' } = useParams()
@@ -29,11 +32,24 @@ export default function ConnectionDatasetsPage() {
 
   const connection = useAsync(() => getConnection(id), [id])
   const canManage = accessAtLeast(connection.data?.access, 'edit')
-  const warehouse = useAsync(() => fetchDatasets(id), [id])
-
   const [edited, setEdited] = useState<Set<string> | null>(null)
   const [query, setQuery] = useState('')
+  const [page, setPage] = useState(1)
+  const search = useDebouncedValue(query.trim(), 400)
+  const [pageFor, setPageFor] = useState(search)
+  if (search !== pageFor) {
+    setPageFor(search)
+    setPage(1)
+  }
+  const warehouse = useAsync(
+    () => fetchDatasetPage(id, { page, pageSize: PAGE_SIZE, search }),
+    [id, page, search]
+  )
   const [saving, setSaving] = useState(false)
+  const seen = useRef(new Map<string, WarehouseDataset>())
+  useEffect(() => {
+    for (const dataset of warehouse.data?.datasets ?? []) seen.current.set(dataset.id, dataset)
+  }, [warehouse.data])
 
   const saved = useMemo(
     () => new Set((connection.data?.selectedDatasets ?? []).map((dataset) => dataset.id)),
@@ -45,30 +61,26 @@ export default function ConnectionDatasetsPage() {
     setEdited((current) => update(current ?? saved))
 
   const datasets: WarehouseDataset[] | null = warehouse.data?.datasets ?? null
-
-  const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase()
-    const rows = datasets ?? []
-    if (!needle) return rows
-    return rows.filter(
-      (dataset) =>
-        dataset.name.toLowerCase().includes(needle) || dataset.id.toLowerCase().includes(needle)
-    )
-  }, [datasets, query])
+  const visible = datasets ?? []
+  const total = warehouse.data?.total ?? null
+  const totalPages = total === null ? null : Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   const dirty = saved.size !== chosen.size || [...chosen].some((datasetId) => !saved.has(datasetId))
 
   const save = async () => {
     if (!datasets) return
     setSaving(true)
-    const payload = datasets
-      .filter((dataset) => chosen.has(dataset.id))
-      .map((dataset) => ({
-        id: dataset.id,
-        name: dataset.name,
-        rowCount: dataset.rowCount,
-        columnCount: dataset.columnCount,
-      }))
+    const savedById = new Map((connection.data?.selectedDatasets ?? []).map((dataset) => [dataset.id, dataset]))
+    const payload = [...chosen].map((datasetId) => {
+      const listed = seen.current.get(datasetId)
+      const stored = savedById.get(datasetId)
+      return {
+        id: datasetId,
+        name: listed?.name ?? stored?.name ?? datasetId,
+        rowCount: listed?.rowCount ?? stored?.rowCount ?? null,
+        columnCount: listed?.columnCount ?? stored?.columnCount ?? null,
+      }
+    })
 
     try {
       await saveSelection(id, payload)
@@ -175,13 +187,13 @@ export default function ConnectionDatasetsPage() {
           description={
             datasets === null
               ? undefined
-              : `${datasets.length} visible to this token. Tick the ones to build a context from.`
+              : `${total !== null ? total.toLocaleString() : 'Datasets'} visible to this token, fetched one page at a time. Tick the ones to build a context from.`
           }
           flush
         >
-          {warehouse.loading ? (
+          {warehouse.loading && datasets === null ? (
             <InlineLoading label="Reading the warehouse…" />
-          ) : datasets === null ? null : datasets.length === 0 ? (
+          ) : datasets === null ? null : datasets.length === 0 && !search && page === 1 ? (
             <EmptyState
               title="This token can see no datasets"
               body="The credential is valid, but the account behind it has not been given access to any dataset."
@@ -190,19 +202,16 @@ export default function ConnectionDatasetsPage() {
           ) : (
             <>
               <div className="border-b border-border px-5 py-3">
-                <div className="relative max-w-xs">
-                  <Search
-                    className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-                    aria-hidden
-                  />
-                  <Input
-                    className="pl-8"
-                    placeholder="Filter by name or id…"
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    aria-label="Filter datasets"
-                  />
-                </div>
+                <SearchToolbar
+                  search={
+                    <SearchBox
+                      value={query}
+                      onChange={setQuery}
+                      placeholder="Search by name or paste a dataset ID…"
+                      label="Search datasets by name or dataset ID"
+                    />
+                  }
+                />
               </div>
 
               {visible.length === 0 ? (
@@ -252,6 +261,29 @@ export default function ConnectionDatasetsPage() {
                   })}
                 </ul>
               )}
+              <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-2.5 text-xs text-muted-foreground">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={warehouse.loading || page <= 1}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                >
+                  <ChevronLeft className="size-3.5" aria-hidden />
+                  Previous
+                </Button>
+                <span className="px-1 font-medium text-foreground">
+                  Page {page}{totalPages !== null ? ` of ${totalPages}` : ''}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={warehouse.loading || !warehouse.data?.hasMore}
+                  onClick={() => setPage((current) => current + 1)}
+                >
+                  Next
+                  <ChevronRight className="size-3.5" aria-hidden />
+                </Button>
+              </div>
             </>
           )}
         </Section>

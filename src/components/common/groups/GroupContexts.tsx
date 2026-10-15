@@ -28,7 +28,7 @@ function LevelSelect({
 }) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as ContextAccessLevel)} disabled={disabled}>
-      <SelectTrigger className="h-8 w-[8.5rem]" aria-label={label}>
+      <SelectTrigger className="w-[8.5rem]" aria-label={label}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -120,7 +120,7 @@ export function GroupContexts({ group }: { group: Group }) {
         <div className="space-y-2 border-b border-border px-5 py-4">
           <div className="flex flex-wrap items-center gap-2">
             <Select value={connectionId} onValueChange={setConnectionId} disabled={adding}>
-              <SelectTrigger className="h-8 min-w-0 flex-1" aria-label="Choose a published context">
+              <SelectTrigger className="min-w-0 flex-1" aria-label="Choose a published context">
                 <SelectValue
                   placeholder={
                     connections.loading

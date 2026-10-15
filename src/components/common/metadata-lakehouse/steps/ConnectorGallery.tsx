@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Lock, Search } from 'lucide-react'
+import { Lock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
+import { SearchBox, SearchToolbar } from '@/components/common/SearchBox'
 import { cn } from '@/lib/utils'
 import type { Connector } from '@/types/metadataLakehouse'
 import { connectorGroups, connectorPresentation, isConnectable } from '@/lib/connectors'
@@ -31,19 +31,9 @@ export function ConnectorGallery({
 
   return (
     <div className="space-y-6">
-      <div className="relative max-w-sm">
-        <Search
-          className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-          aria-hidden
-        />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search connectors…"
-          className="pl-8"
-          aria-label="Search connectors"
-        />
-      </div>
+      <SearchToolbar
+        search={<SearchBox value={search} onChange={setSearch} placeholder="Search connectors…" />}
+      />
 
       {available.length > 0 ? (
         <section>

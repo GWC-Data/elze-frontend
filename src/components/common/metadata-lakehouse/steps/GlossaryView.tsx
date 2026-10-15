@@ -1,6 +1,5 @@
 import { useDeferredValue, useState } from 'react'
-import { Search } from 'lucide-react'
-import { Input } from '@/components/ui/input'
+import { SearchBox, SearchToolbar } from '@/components/common/SearchBox'
 import { cn } from '@/lib/utils'
 import { Pagination } from '@/components/common/Pagination'
 import { serverPage } from '@/hooks/usePagination'
@@ -127,25 +126,14 @@ function GlossaryTable({
         <h3 className="mt-1 font-serif text-2xl font-semibold tracking-tight">Business glossary</h3>
       </header>
 
-      <div className="flex flex-wrap items-center gap-3 px-5 py-3.5">
-        <div className="relative w-full sm:w-72">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-            placeholder="Search terms"
-            aria-label="Search terms"
-            className="h-9 pl-9"
-          />
-        </div>
-
+      <SearchToolbar
+        className="px-5 py-3.5"
+        search={<SearchBox value={search} onChange={onSearch} placeholder="Search terms…" label="Search terms" />}
+      >
         <div
           role="group"
           aria-label="Filter by state"
-          className="inline-flex overflow-hidden rounded-lg border"
+          className="inline-flex h-10 overflow-hidden rounded-lg border"
         >
           {FILTERS.map((f) => (
             <button
@@ -164,7 +152,7 @@ function GlossaryTable({
             </button>
           ))}
         </div>
-      </div>
+      </SearchToolbar>
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] table-fixed text-sm">

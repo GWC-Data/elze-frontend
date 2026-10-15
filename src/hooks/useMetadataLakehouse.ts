@@ -42,7 +42,10 @@ import type {
   SelectedDataset,
   TableProfile,
   WarehouseDataset,
-  DatasetListing,
+  DatasetPage,
+  DatasetPageQuery,
+  DraftConnectionsPage,
+  DraftConnectionsQuery,
   GlossaryQuery,
   ReviewQuery,
 } from '@/types/metadataLakehouse'
@@ -132,6 +135,14 @@ export function useConnections() {
   })
 }
 
+export function useDraftConnections(query: DraftConnectionsQuery) {
+  return useQuery<DraftConnectionsPage>({
+    queryKey: contextKeys.draftConnections(query),
+    queryFn: () => connectionsApi.listDraftConnections(query),
+    placeholderData: (prev) => prev,
+  })
+}
+
 export function useConnection(connectionId: string | null) {
   const version = useViewVersionId()
   return useQuery<Connection>({
@@ -186,15 +197,6 @@ export function useCreateConnection() {
     onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: contextKeys.connections() })
       qc.setQueryData<Connection>(contextKeys.connection(created.connection.id), created.connection)
-      qc.setQueryData<DatasetListing>(
-        contextKeys.datasets(created.connection.id, created.limit),
-        {
-          datasets: created.datasets,
-          fetchedAt: new Date().toISOString(),
-          limit: created.limit,
-          truncated: created.truncated,
-        }
-      )
     },
   })
 }
@@ -215,18 +217,26 @@ export function useDeleteConnection() {
   })
 }
 
-export function useDatasets(
-  connectionId: string | null,
-  limit?: number,
-  enabled = true
-) {
+export function useDatasets(connectionId: string | null, query: DatasetPageQuery, enabled = true) {
   const version = useViewVersionId()
-  return useQuery<DatasetListing>({
-    queryKey: [...contextKeys.datasets(connectionId ?? '', limit), ...scoped(version)],
-    queryFn: () => datasetsApi.fetchDatasets(connectionId!, limit, version),
+  return useQuery<DatasetPage>({
+    queryKey: [...contextKeys.datasets(connectionId ?? '', query), ...scoped(version)],
+    queryFn: () => datasetsApi.fetchDatasetPage(connectionId!, query, { version }),
     enabled: Boolean(connectionId) && enabled,
-    staleTime: 0,
+    staleTime: 2 * 60_000,
     placeholderData: (prev) => prev,
+  })
+}
+
+export function useRefreshDatasets(connectionId: string | null) {
+  const qc = useQueryClient()
+  const version = useViewVersionId()
+  return useMutation<DatasetPage, unknown, DatasetPageQuery>({
+    mutationFn: (query) => datasetsApi.fetchDatasetPage(connectionId!, query, { fresh: true, version }),
+    onSuccess: (page, query) => {
+      qc.removeQueries({ queryKey: contextKeys.datasetsAll(connectionId ?? '') })
+      qc.setQueryData([...contextKeys.datasets(connectionId ?? '', query), ...scoped(version)], page)
+    },
   })
 }
 

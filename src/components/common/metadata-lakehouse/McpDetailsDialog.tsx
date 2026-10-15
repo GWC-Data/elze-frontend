@@ -13,7 +13,7 @@ import { notify } from '@/lib/notify'
 import { cn } from '@/lib/utils'
 import { MCP_CONFIG, mcpClientConfig, mcpServerName } from '@/constants/mcp'
 import { formatRelativeTime } from '@/lib/format'
-import type { Connection } from '@/types/metadataLakehouse'
+import type { McpTarget } from '@/types/metadataLakehouse'
 import { Hint } from '@/components/common/Hint'
 
 const NO_SCROLLBAR = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
@@ -22,7 +22,7 @@ export function McpDetailsDialog({
   connection,
   onOpenChange,
 }: {
-  connection: Connection | null
+  connection: McpTarget | null
   onOpenChange: (open: boolean) => void
 }) {
   return (
@@ -34,7 +34,7 @@ export function McpDetailsDialog({
   )
 }
 
-function DetailsBody({ connection }: { connection: Connection }) {
+function DetailsBody({ connection }: { connection: McpTarget }) {
   const published = connection.published ?? null
   const serverName = mcpServerName(connection.name)
   const config = mcpClientConfig(connection.name)

@@ -131,7 +131,7 @@ export function ConnectionForm({
               help="A connection belongs to one company. Platform accounts have none of their own."
             >
               <Select value={companyId} onValueChange={setCompanyId} disabled={locked}>
-                <SelectTrigger id="cred-company" className="w-full data-[size=default]:h-10">
+                <SelectTrigger id="cred-company" size="lg" className="w-full">
                   <SelectValue placeholder="Select a company…" />
                 </SelectTrigger>
                 <SelectContent>

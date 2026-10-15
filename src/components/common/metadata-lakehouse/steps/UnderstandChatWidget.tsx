@@ -15,10 +15,9 @@ import { cn } from '@/lib/utils'
 import { notify } from '@/lib/notify'
 import { errorMessage } from '@/api/client'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { MarkdownText } from '@/components/common/agent/tools/MarkdownText'
 import { Hint } from '@/components/common/Hint'
-import { ChatBalloon } from '@/components/common/agent/ChatBalloon'
+import { useAuth } from '@/context/authContext'
 import {
   createDescriptionEditorSession,
   getAdkSessionUsage,
@@ -34,6 +33,9 @@ import type { AdkArtifact, AdkSessionUsage } from '@/types/adk'
 const AGENT = 'description_editor' as const
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 const MAX_OPTIONS = 40
+const MAX_INPUT_HEIGHT = 200
+
+const AGENT_NAME = 'Description editor'
 
 const SUGGESTIONS = [
   'Rewrite the description in plain business language.',
@@ -94,11 +96,13 @@ export function UnderstandChatWidget({
   const [picker, setPicker] = React.useState<{ start: number; query: string } | null>(null)
   const [activeIndex, setActiveIndex] = React.useState(0)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
-  const inputRef = React.useRef<HTMLInputElement>(null)
+  const inputRef = React.useRef<HTMLTextAreaElement>(null)
   const listRef = React.useRef<HTMLDivElement>(null)
   const optionsRef = React.useRef<HTMLDivElement>(null)
 
   const rows = mentions
+  const { user } = useAuth()
+  const userName = user?.displayName || user?.username || 'You'
 
   const pickerQuery = React.useDeferredValue(picker?.query ?? '')
   const facts = useFactsByTable(
@@ -127,6 +131,14 @@ export function UnderstandChatWidget({
     const list = listRef.current
     if (list) list.scrollTop = list.scrollHeight
   }, [turns.length, isSending])
+
+  React.useLayoutEffect(() => {
+    const box = inputRef.current
+    if (!box) return
+    box.style.height = 'auto'
+    box.style.height = `${Math.min(box.scrollHeight, MAX_INPUT_HEIGHT)}px`
+    box.style.overflowY = box.scrollHeight > MAX_INPUT_HEIGHT ? 'auto' : 'hidden'
+  }, [message])
 
   React.useEffect(() => {
     const active = optionsRef.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`)
@@ -194,9 +206,9 @@ export function UnderstandChatWidget({
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
     const text = message
-    void submit(text).then((sent) => {
-      if (sent) setMessage((current) => (current === text ? '' : current))
-    })
+    if (isSending || !text.trim() || rows.length === 0) return
+    setMessage('')
+    void submit(text)
   }
 
   const choose = (row: MentionRow) => {
@@ -223,8 +235,14 @@ export function UnderstandChatWidget({
     setPicker(token)
   }
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!picker) return
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!picker) {
+      if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+        event.preventDefault()
+        event.currentTarget.form?.requestSubmit()
+      }
+      return
+    }
     if (event.key === 'ArrowDown') {
       event.preventDefault()
       setActiveIndex((i) => Math.min(i + 1, Math.max(options.length - 1, 0)))
@@ -300,12 +318,14 @@ export function UnderstandChatWidget({
       aria-label="Description editor"
       className={cn('flex flex-col overflow-hidden rounded-xl border bg-background shadow-sm', className)}
     >
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-sidebar px-4 py-3">
-        <div className="flex min-w-0 items-center gap-2 text-sidebar-foreground">
-          <Sparkles className="size-4 shrink-0" />
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-card px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <AgentAvatar />
           <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold">Description editor</span>
-            <span className="block truncate text-[11px] text-sidebar-foreground/70">
+            <span className="block truncate font-serif text-base font-semibold tracking-tight text-foreground">
+              {AGENT_NAME}
+            </span>
+            <span className="block truncate text-[11px] text-muted-foreground">
               Rewrites table and column descriptions in this draft
             </span>
           </span>
@@ -316,7 +336,7 @@ export function UnderstandChatWidget({
             aria-label="Usage for this chat"
             disabled={!sessionId}
             onClick={() => void toggleUsage()}
-            className="shrink-0 cursor-pointer rounded-md p-1.5 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            className="shrink-0 cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
             <BarChart3 className="size-4" />
           </button>
@@ -339,15 +359,20 @@ export function UnderstandChatWidget({
 
       <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-4">
         {turns.length === 0 && !isSending ? (
-          <div className="flex min-h-full flex-col items-center justify-center gap-4">
-            <ChatBalloon className="w-24" />
-            <div className="flex w-full flex-col gap-2">
+          <div className="flex min-h-full flex-col items-center justify-center gap-5 text-center">
+            <div>
+              <h3 className="font-serif text-2xl font-semibold tracking-tight text-foreground">What should change?</h3>
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                Type @ to pick tables or columns, then say how their descriptions should read.
+              </p>
+            </div>
+            <div className="flex flex-wrap justify-center gap-2">
               {SUGGESTIONS.map((suggestion) => (
                 <button
                   key={suggestion}
                   type="button"
                   onClick={() => applySuggestion(suggestion)}
-                  className="cursor-pointer rounded-xl border bg-card px-3 py-2 text-left text-sm text-foreground hover:border-foreground/30 hover:bg-accent/30"
+                  className="cursor-pointer rounded-full border bg-card px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
                 >
                   {suggestion}
                 </button>
@@ -355,49 +380,23 @@ export function UnderstandChatWidget({
             </div>
           </div>
         ) : (
-          <div className="flex min-w-0 flex-col gap-3">
+          <div className="flex min-w-0 flex-col gap-4">
             {turns.map((turn) => (
-              <TurnBubble key={turn.id} turn={turn} />
+              <TurnBubble key={turn.id} turn={turn} userName={userName} />
             ))}
             {isSending && (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Loader2 className="size-3 animate-spin" /> Rewriting…
+              <div className="flex items-center gap-2.5">
+                <AgentAvatar />
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="size-3 animate-spin" /> {AGENT_NAME} is rewriting…
+                </span>
               </div>
             )}
           </div>
         )}
       </div>
 
-      {hasContext && (
-        <div className="flex max-h-28 shrink-0 flex-wrap items-center gap-1.5 overflow-y-auto border-t bg-card px-3 pt-2">
-          {mentions.map((row) => (
-            <Chip
-              key={row.id}
-              icon={<AtSign className="size-3 shrink-0" />}
-              label={row.label}
-              hint={row.fullName}
-              onRemove={() => onRemoveMention(row.id)}
-              removeLabel={`Remove ${row.label}`}
-            />
-          ))}
-          {attachments.map((artifact) => (
-            <Chip
-              key={artifact.id}
-              icon={<Paperclip className="size-3 shrink-0" />}
-              label={artifact.filename}
-              hint={artifact.filename}
-              detail={formatSize(artifact.sizeBytes)}
-              onRemove={() => setAttachments((prev) => prev.filter((a) => a.id !== artifact.id))}
-              removeLabel={`Remove ${artifact.filename}`}
-            />
-          ))}
-        </div>
-      )}
-
-      <form
-        className={cn('relative flex shrink-0 flex-col gap-1.5 p-3', !hasContext && 'border-t bg-card')}
-        onSubmit={handleSubmit}
-      >
+      <form className="relative shrink-0 border-t bg-card p-3" onSubmit={handleSubmit}>
         {picker ? (
           <div
             ref={optionsRef}
@@ -442,31 +441,35 @@ export function UnderstandChatWidget({
           </div>
         ) : null}
 
-        <div className="flex items-center gap-1.5">
-          <Hint label="Attach a file">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="size-9 shrink-0 cursor-pointer rounded-full"
-              aria-label="Attach a file"
-              disabled={isAttaching}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {isAttaching ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
-            </Button>
-          </Hint>
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            onChange={(event) => {
-              void handleFile(event.target.files?.[0] ?? null)
-              event.target.value = ''
-            }}
-          />
-          <Input
+        <div className="rounded-2xl border bg-background p-2 transition-colors focus-within:border-foreground/30">
+          {hasContext && (
+            <div className="mb-1 flex max-h-28 flex-wrap items-center gap-1.5 overflow-y-auto px-1 pt-1">
+              {mentions.map((row) => (
+                <Chip
+                  key={row.id}
+                  icon={<AtSign className="size-3 shrink-0" />}
+                  label={row.label}
+                  hint={row.fullName}
+                  onRemove={() => onRemoveMention(row.id)}
+                  removeLabel={`Remove ${row.label}`}
+                />
+              ))}
+              {attachments.map((artifact) => (
+                <Chip
+                  key={artifact.id}
+                  icon={<Paperclip className="size-3 shrink-0" />}
+                  label={artifact.filename}
+                  hint={artifact.filename}
+                  detail={formatSize(artifact.sizeBytes)}
+                  onRemove={() => setAttachments((prev) => prev.filter((a) => a.id !== artifact.id))}
+                  removeLabel={`Remove ${artifact.filename}`}
+                />
+              ))}
+            </div>
+          )}
+          <textarea
             ref={inputRef}
+            rows={1}
             value={message}
             onChange={(event) => {
               setMessage(event.target.value)
@@ -481,34 +484,59 @@ export function UnderstandChatWidget({
             aria-expanded={picker !== null}
             aria-controls={picker ? 'description-editor-mentions' : undefined}
             aria-activedescendant={picker && options[activeIndex] ? `description-editor-mention-${activeIndex}` : undefined}
-            className="h-9 flex-1 rounded-full px-3"
+            className="block min-h-10 w-full resize-none border-0 bg-transparent px-1.5 py-2 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground"
           />
-          {isSending ? (
-            <Hint label="Stop">
+          <div className="mt-1 flex items-center gap-1.5">
+            <Hint label="Attach a file">
               <Button
                 type="button"
-                size="icon"
                 variant="outline"
-                className="size-9 shrink-0 cursor-pointer rounded-full"
-                aria-label="Stop"
-                onClick={() => void handleStop()}
-              >
-                <Square className="size-3.5" />
-              </Button>
-            </Hint>
-          ) : (
-            <Hint label="Send">
-              <Button
-                type="submit"
                 size="icon"
-                className="size-9 shrink-0 cursor-pointer rounded-full"
-                aria-label="Send"
-                disabled={!message.trim() || rows.length === 0 || picker !== null}
+                className="size-8 shrink-0 cursor-pointer rounded-full"
+                aria-label="Attach a file"
+                disabled={isAttaching}
+                onClick={() => fileInputRef.current?.click()}
               >
-                <ArrowUp className="size-4" />
+                {isAttaching ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
               </Button>
             </Hint>
-          )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={(event) => {
+                void handleFile(event.target.files?.[0] ?? null)
+                event.target.value = ''
+              }}
+            />
+            <span className="ml-auto" />
+            {isSending ? (
+              <Hint label="Stop">
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  className="size-8 shrink-0 cursor-pointer rounded-full"
+                  aria-label="Stop"
+                  onClick={() => void handleStop()}
+                >
+                  <Square className="size-3.5" />
+                </Button>
+              </Hint>
+            ) : (
+              <Hint label="Send">
+                <Button
+                  type="submit"
+                  size="icon"
+                  className="size-8 shrink-0 cursor-pointer rounded-full"
+                  aria-label="Send"
+                  disabled={!message.trim() || rows.length === 0 || picker !== null}
+                >
+                  <ArrowUp className="size-4" />
+                </Button>
+              </Hint>
+            )}
+          </div>
         </div>
       </form>
     </section>
@@ -551,32 +579,58 @@ function Chip({
   )
 }
 
-function TurnBubble({ turn }: { turn: Turn }) {
+function AgentAvatar() {
+  return (
+    <span
+      className="grid size-7 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground"
+      aria-hidden
+    >
+      <Sparkles className="size-3.5" />
+    </span>
+  )
+}
+
+function UserAvatar({ name }: { name: string }) {
+  return (
+    <span
+      className="grid size-7 shrink-0 place-items-center rounded-full border bg-card text-xs font-semibold text-foreground"
+      aria-hidden
+    >
+      {name.charAt(0).toUpperCase()}
+    </span>
+  )
+}
+
+function TurnBubble({ turn, userName }: { turn: Turn; userName: string }) {
   if (turn.role === 'user') {
     return (
-      <div className="flex flex-col items-end gap-1">
-        <div className="flex max-w-[85%] flex-wrap justify-end gap-1">
-          {turn.rows.map((row) => (
-            <Hint key={row.id} label={row.fullName}>
-              <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
-                <AtSign className="size-2.5 shrink-0" aria-hidden />
-                <span className="truncate">{row.label}</span>
+      <div className="flex items-start justify-end gap-2.5">
+        <div className="flex min-w-0 max-w-[85%] flex-col items-end gap-1">
+          <span className="px-1 text-xs font-medium text-muted-foreground">{userName}</span>
+          <div className="flex flex-wrap justify-end gap-1">
+            {turn.rows.map((row) => (
+              <Hint key={row.id} label={row.fullName}>
+                <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
+                  <AtSign className="size-2.5 shrink-0" aria-hidden />
+                  <span className="truncate">{row.label}</span>
+                </span>
+              </Hint>
+            ))}
+            {turn.files.map((name) => (
+              <span
+                key={name}
+                className="inline-flex max-w-full items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+              >
+                <Paperclip className="size-2.5 shrink-0" aria-hidden />
+                <span className="truncate">{name}</span>
               </span>
-            </Hint>
-          ))}
-          {turn.files.map((name) => (
-            <span
-              key={name}
-              className="inline-flex max-w-full items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
-            >
-              <Paperclip className="size-2.5 shrink-0" aria-hidden />
-              <span className="truncate">{name}</span>
-            </span>
-          ))}
+            ))}
+          </div>
+          <p className="rounded-2xl rounded-tr-sm bg-primary px-3.5 py-2 text-sm whitespace-pre-wrap text-primary-foreground">
+            {turn.text}
+          </p>
         </div>
-        <p className="max-w-[85%] rounded-2xl bg-primary px-3 py-1.5 text-sm whitespace-pre-wrap text-primary-foreground">
-          {turn.text}
-        </p>
+        <UserAvatar name={userName} />
       </div>
     )
   }
@@ -590,14 +644,18 @@ function TurnBubble({ turn }: { turn: Turn }) {
   }
 
   return (
-    <div className="flex flex-col items-start gap-1">
-      <div className="max-w-[90%] rounded-2xl bg-muted px-3 py-1.5 text-sm text-foreground">
-        <MarkdownText text={turn.text} />
+    <div className="flex items-start justify-start gap-2.5">
+      <AgentAvatar />
+      <div className="flex min-w-0 max-w-[90%] flex-col items-start gap-1">
+        <span className="px-1 text-xs font-medium text-muted-foreground">{AGENT_NAME}</span>
+        <div className="rounded-2xl rounded-tl-sm bg-muted px-3.5 py-2 text-sm text-foreground">
+          <MarkdownText text={turn.text} />
+        </div>
+        {turn.toolCalls.length > 0 && (
+          <span className="px-1 text-[11px] text-muted-foreground">Used: {turn.toolCalls.join(', ')}</span>
+        )}
+        {turn.interrupted && <span className="px-1 text-[11px] text-muted-foreground">Stopped early.</span>}
       </div>
-      {turn.toolCalls.length > 0 && (
-        <span className="px-1 text-[11px] text-muted-foreground">Used: {turn.toolCalls.join(', ')}</span>
-      )}
-      {turn.interrupted && <span className="px-1 text-[11px] text-muted-foreground">Stopped early.</span>}
     </div>
   )
 }

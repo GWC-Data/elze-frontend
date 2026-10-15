@@ -10,10 +10,11 @@ export const contextKeys = {
   versions: (connectionId: string) => [...contextKeys.all, 'versions', connectionId] as const,
 
   connections: () => [...contextKeys.all, 'connections'] as const,
+  draftConnections: (query: object) => [...contextKeys.connections(), 'drafts', query] as const,
   connection: (id: string) => [...contextKeys.connections(), id] as const,
 
-  datasets: (connectionId: string, limit?: number) =>
-    [...contextKeys.all, 'datasets', connectionId, limit ?? 'default'] as const,
+  datasets: (connectionId: string, query: object) =>
+    [...contextKeys.all, 'datasets', connectionId, query] as const,
   datasetsAll: (connectionId: string) =>
     [...contextKeys.all, 'datasets', connectionId] as const,
 

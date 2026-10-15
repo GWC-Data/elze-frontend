@@ -38,7 +38,7 @@ export function LakehouseSection({
         </div>
         {enabled && (
           <Link
-            to={paths.metadataLakehouse}
+            to={paths.metadataLakehousePublished}
             className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
           >
             Open Lakehouse

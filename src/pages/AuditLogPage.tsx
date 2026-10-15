@@ -103,7 +103,7 @@ export default function AuditLogPage() {
         value={filters.category ?? ALL}
         onValueChange={(value) => setFilter('category', value === ALL ? undefined : (value as AuditCategory))}
       >
-        <SelectTrigger size="sm" className="min-w-44" aria-label="Filter by area">
+        <SelectTrigger size="lg" className="min-w-44" aria-label="Filter by area">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -119,7 +119,7 @@ export default function AuditLogPage() {
         value={filters.action ?? ALL}
         onValueChange={(value) => setFilter('action', value === ALL ? undefined : (value as AuditAction))}
       >
-        <SelectTrigger size="sm" className="min-w-32" aria-label="Filter by action">
+        <SelectTrigger size="lg" className="min-w-32" aria-label="Filter by action">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -135,7 +135,7 @@ export default function AuditLogPage() {
         From
         <Input
           type="date"
-          className="h-7 w-36 text-xs"
+          className="h-10 w-40 bg-background text-sm md:text-sm"
           value={filters.from ?? ''}
           max={filters.to ?? today}
           onChange={(event) => setFilter('from', event.target.value)}
@@ -145,7 +145,7 @@ export default function AuditLogPage() {
         To
         <Input
           type="date"
-          className="h-7 w-36 text-xs"
+          className="h-10 w-40 bg-background text-sm md:text-sm"
           value={filters.to ?? ''}
           min={filters.from}
           max={today}

@@ -7,6 +7,7 @@ import {
   Loader2,
   MessageSquarePlus,
   Paperclip,
+  Sparkles,
   Square,
   Trash2,
 } from "lucide-react"
@@ -15,10 +16,10 @@ import { cn } from "@/lib/utils"
 import { notify } from "@/lib/notify"
 import { useAsync } from "@/hooks/useAsync"
 import { Button } from "@/components/ui/workbench/button"
-import { Input } from "@/components/ui/workbench/input"
 import { Skeleton } from "@/components/ui/workbench/skeleton"
 import { MarkdownText } from "@/components/common/agent/tools/MarkdownText"
-import { ChatBalloon } from "@/components/common/agent/ChatBalloon"
+import { useAuth } from "@/context/authContext"
+import { dayGreeting, visibleMessage } from "@/lib/agentMessage"
 import { ErrorState, InlineLoading } from "@/components/common/States"
 import type {
   AdkArtifact,
@@ -30,9 +31,10 @@ import type {
 } from "@/types/adk"
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+const MAX_INPUT_HEIGHT = 200
 
 type Turn =
-  | { id: string; role: "user"; text: string }
+  | { id: string; role: "user"; text: string; files?: string[] }
   | { id: string; role: "agent"; text: string; toolCalls: string[]; interrupted: boolean }
   | { id: string; role: "error"; text: string }
 
@@ -52,10 +54,11 @@ function formatUsage(usage: AdkSessionUsage): string {
 
 export interface AdkChatWorkbenchProps {
   sessionId?: string
-  basePath: (sessionId?: string) => string
+  basePath: (sessionId?: string, contextId?: string) => string
   emptyTitle: string
   emptyBody: string
   placeholder: string
+  agentName: string
   suggestions?: string[]
   loadSession: (sessionId: string) => Promise<AdkSessionDetail>
   createSession: () => Promise<AdkSessionSummary>
@@ -64,6 +67,8 @@ export interface AdkChatWorkbenchProps {
   getUsage: (sessionId: string) => Promise<AdkSessionUsage>
   uploadFile?: (sessionId: string, file: File) => Promise<AdkArtifact>
   sessions: AdkSessionSummary[] | null
+  sessionLabel?: (session: AdkSessionSummary) => string | null
+  sessionsNotice?: React.ReactNode
   reloadSessions: () => void
   onDeleteSession?: (sessionId: string) => Promise<void>
   composerAccessory?: React.ReactNode
@@ -76,6 +81,7 @@ export function AdkChatWorkbench({
   emptyTitle,
   emptyBody,
   placeholder,
+  agentName,
   suggestions = [],
   loadSession,
   createSession,
@@ -84,12 +90,16 @@ export function AdkChatWorkbench({
   getUsage,
   uploadFile,
   sessions,
+  sessionLabel,
+  sessionsNotice,
   reloadSessions,
   onDeleteSession,
   composerAccessory,
   initialAutoSend,
 }: AdkChatWorkbenchProps) {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const userName = user?.displayName || user?.username || "You"
   const [message, setMessage] = React.useState("")
   const [isSending, setIsSending] = React.useState(false)
   const [attachments, setAttachments] = React.useState<AdkArtifact[]>([])
@@ -99,18 +109,18 @@ export function AdkChatWorkbench({
   const [usageLoading, setUsageLoading] = React.useState(false)
   const [deletingSessionId, setDeletingSessionId] = React.useState<string | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
+  const messageRef = React.useRef<HTMLTextAreaElement>(null)
   const endRef = React.useRef<HTMLDivElement>(null)
 
   const viewKey = sessionId ?? "new"
   const history = useAsync(() => (sessionId ? loadSession(sessionId) : Promise.resolve(null)), [sessionId])
   const historyTurns = React.useMemo<Turn[]>(() => {
     if (!history.data) return []
-    return history.data.turns.map((turn) => ({
-      id: crypto.randomUUID(),
-      role: turn.role === "user" ? "user" : "agent",
-      text: turn.text,
-      ...(turn.role === "user" ? {} : { toolCalls: [], interrupted: false }),
-    })) as Turn[]
+    return history.data.turns.map((turn) =>
+      turn.role === "user"
+        ? { id: crypto.randomUUID(), role: "user", ...visibleMessage(turn.text) }
+        : { id: crypto.randomUUID(), role: "agent", text: turn.text, toolCalls: [], interrupted: false }
+    ) as Turn[]
   }, [history.data])
   const [local, setLocal] = React.useState<{ key: string; items: Turn[] } | null>(null)
   const hasLocal = local !== null && local.key === viewKey
@@ -121,6 +131,14 @@ export function AdkChatWorkbench({
   React.useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" })
   }, [turns.length, isSending])
+
+  React.useLayoutEffect(() => {
+    const box = messageRef.current
+    if (!box) return
+    box.style.height = "auto"
+    box.style.height = `${Math.min(box.scrollHeight, MAX_INPUT_HEIGHT)}px`
+    box.style.overflowY = box.scrollHeight > MAX_INPUT_HEIGHT ? "auto" : "hidden"
+  })
 
   const submit = async (rawText: string) => {
     const text = rawText.trim()
@@ -150,7 +168,7 @@ export function AdkChatWorkbench({
         activeSession = created.sessionId
         key = created.sessionId
         setLocal((prev) => (prev ? { key, items: prev.items } : prev))
-        navigate(basePath(activeSession), { replace: true })
+        navigate(basePath(activeSession, created.contextId), { replace: true })
       } catch {
         setIsSending(false)
         setLocal((prev) => (prev && prev.key === viewKey ? { key, items: base } : prev))
@@ -202,6 +220,12 @@ export function AdkChatWorkbench({
     void submit(text)
   }
 
+  const handleMessageKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return
+    event.preventDefault()
+    if (!isSending) event.currentTarget.form?.requestSubmit()
+  }
+
   const autoSentRef = React.useRef(false)
   React.useEffect(() => {
     if (!initialAutoSend || autoSentRef.current || sessionId || historyLoading) return
@@ -227,7 +251,7 @@ export function AdkChatWorkbench({
       if (!activeSession) {
         const created = await createSession()
         activeSession = created.sessionId
-        navigate(basePath(activeSession), { replace: true })
+        navigate(basePath(activeSession, created.contextId), { replace: true })
       }
       const artifact = await uploadFile(activeSession, file)
       setAttachments((prev) => [...prev, artifact])
@@ -272,6 +296,96 @@ export function AdkChatWorkbench({
 
   const showEmptyState = !historyLoading && !historyError && turns.length === 0 && !isSending
 
+  const attachButton = uploadFile ? (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      className="size-10 shrink-0 cursor-pointer rounded-full"
+      aria-label="Attach a file"
+      disabled={isAttaching}
+      onClick={() => fileInputRef.current?.click()}
+    >
+      {isAttaching ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
+    </Button>
+  ) : null
+
+  const sendButton = isSending ? (
+    <Button
+      type="button"
+      size="icon"
+      variant="outline"
+      className="size-10 shrink-0 cursor-pointer rounded-full"
+      aria-label="Stop"
+      onClick={() => void handleStop()}
+    >
+      <Square className="size-3.5" />
+    </Button>
+  ) : (
+    <Button
+      type="submit"
+      size="icon"
+      className="size-10 shrink-0 cursor-pointer rounded-full"
+      aria-label="Send"
+      disabled={!message.trim() && attachments.length === 0}
+    >
+      <ArrowUp className="size-4" />
+    </Button>
+  )
+
+  const attachmentChips = attachments.map((artifact) => (
+    <span
+      key={artifact.id}
+      className="flex items-center gap-1.5 rounded-full border bg-muted px-2.5 py-1 text-xs text-foreground"
+    >
+      <Paperclip className="size-3 shrink-0" />
+      <span className="max-w-32 truncate">{artifact.filename}</span>
+      <span className="text-muted-foreground">{formatSize(artifact.sizeBytes)}</span>
+    </span>
+  ))
+
+  const messageBox = (hero: boolean) => (
+    <textarea
+      ref={messageRef}
+      rows={1}
+      value={message}
+      onChange={(event) => setMessage(event.target.value)}
+      onKeyDown={handleMessageKeyDown}
+      placeholder={placeholder}
+      aria-label={placeholder}
+      autoFocus={hero}
+      className={cn(
+        "block w-full resize-none border-0 bg-transparent px-1.5 text-foreground outline-none placeholder:text-muted-foreground",
+        hero ? "min-h-11 py-2.5 text-base leading-6" : "min-h-[38px] py-[7px] text-sm leading-6"
+      )}
+    />
+  )
+
+  const renderComposer = (hero: boolean) =>
+    hero ? (
+      <form
+        onSubmit={handleSubmit}
+        className="rounded-2xl border bg-card p-3 shadow-sm transition-colors focus-within:border-foreground/30"
+      >
+        {attachments.length > 0 && <div className="mb-2 flex flex-wrap gap-1.5">{attachmentChips}</div>}
+        {messageBox(true)}
+        <div className="mt-2 flex items-center gap-2">
+          {attachButton}
+          {composerAccessory}
+          <div className="ml-auto">{sendButton}</div>
+        </div>
+      </form>
+    ) : (
+      <form className="flex items-end gap-2 p-4" onSubmit={handleSubmit}>
+        {attachButton}
+        {composerAccessory}
+        <div className="min-w-0 flex-1 rounded-[20px] border bg-background px-2.5 transition-colors focus-within:border-foreground/30">
+          {messageBox(false)}
+        </div>
+        {sendButton}
+      </form>
+    )
+
   return (
     <div className="agent-workbench flex h-full bg-background text-sm leading-loose">
       <aside className="hidden w-56 shrink-0 flex-col border-r bg-card sm:flex">
@@ -288,6 +402,7 @@ export function AdkChatWorkbench({
           </Button>
         </div>
         <div className="min-h-0 flex-1 overflow-auto px-2 pb-2">
+          {sessionsNotice}
           {sessions === null ? (
             <div className="flex flex-col gap-1.5 p-2">
               <Skeleton className="h-7 w-full rounded-md" />
@@ -311,7 +426,7 @@ export function AdkChatWorkbench({
                   <li key={entry.sessionId} className="group flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => navigate(basePath(entry.sessionId))}
+                      onClick={() => navigate(basePath(entry.sessionId, entry.contextId))}
                       className={cn(
                         "flex-1 truncate rounded-md px-2 py-1.5 text-left text-xs transition-colors",
                         active
@@ -319,7 +434,12 @@ export function AdkChatWorkbench({
                           : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                       )}
                     >
-                      {label}
+                      {sessionLabel?.(entry) ? (
+                        <span className="block truncate text-[11px] font-medium text-foreground/80">
+                          {sessionLabel(entry)}
+                        </span>
+                      ) : null}
+                      <span className="block truncate">{label}</span>
                     </button>
                     {onDeleteSession && (
                       <button
@@ -377,20 +497,24 @@ export function AdkChatWorkbench({
           ) : historyError ? (
             <ErrorState error={historyError} title="Couldn't load this conversation" />
           ) : showEmptyState ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-              <ChatBalloon />
-              <div className="flex flex-col gap-1 text-muted-foreground">
-                <span className="text-base font-semibold text-card-foreground">{emptyTitle}</span>
-                <span>{emptyBody}</span>
+            <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-center gap-6 py-8">
+              <div className="text-center">
+                <h1 className="font-serif text-3xl font-semibold tracking-tight text-foreground">
+                  {dayGreeting()}, {userName}
+                </h1>
+                <p className="mt-2 text-muted-foreground">
+                  {emptyTitle} {emptyBody}
+                </p>
               </div>
+              {renderComposer(true)}
               {suggestions.length > 0 && (
-                <div className="mt-2 flex w-full max-w-md flex-col gap-2">
+                <div className="flex flex-wrap justify-center gap-2">
                   {suggestions.map((suggestion) => (
                     <button
                       key={suggestion}
                       type="button"
                       onClick={() => void submit(suggestion)}
-                      className="cursor-pointer rounded-xl border bg-card px-3 py-2 text-left text-sm text-foreground hover:border-foreground/30 hover:bg-accent/30"
+                      className="cursor-pointer rounded-full border bg-card px-3.5 py-1.5 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
                     >
                       {suggestion}
                     </button>
@@ -399,13 +523,16 @@ export function AdkChatWorkbench({
               )}
             </div>
           ) : (
-            <div className="flex min-w-0 flex-col gap-3">
+            <div className="flex min-w-0 flex-col gap-4">
               {turns.map((turn) => (
-                <TurnBubble key={turn.id} turn={turn} />
+                <TurnBubble key={turn.id} turn={turn} userName={userName} agentName={agentName} />
               ))}
               {isSending && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Loader2 className="size-3 animate-spin" /> Thinking…
+                <div className="flex items-center gap-2.5">
+                  <AgentAvatar />
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="size-3 animate-spin" /> {agentName} is thinking…
+                  </span>
                 </div>
               )}
               <div ref={endRef} />
@@ -413,90 +540,76 @@ export function AdkChatWorkbench({
           )}
         </div>
 
-        {attachments.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 border-t bg-card px-3 pt-2">
-            {attachments.map((artifact) => (
-              <span
-                key={artifact.id}
-                className="flex items-center gap-1.5 rounded-full border bg-muted px-2.5 py-1 text-xs text-foreground"
-              >
-                <Paperclip className="size-3 shrink-0" />
-                <span className="max-w-32 truncate">{artifact.filename}</span>
-                <span className="text-muted-foreground">{formatSize(artifact.sizeBytes)}</span>
-              </span>
-            ))}
-          </div>
+        {uploadFile && (
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(event) => {
+              void handleFile(event.target.files?.[0] ?? null)
+              event.target.value = ""
+            }}
+          />
         )}
 
-        <div className="relative z-10 w-full border-t bg-card">
-          <form className="flex items-center gap-2 p-4" onSubmit={handleSubmit}>
-            {uploadFile && (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="size-10 shrink-0 cursor-pointer rounded-full"
-                aria-label="Attach a file"
-                disabled={isAttaching}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {isAttaching ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
-              </Button>
-            )}
-            {uploadFile && (
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                onChange={(event) => {
-                  void handleFile(event.target.files?.[0] ?? null)
-                  event.target.value = ""
-                }}
-              />
-            )}
-            {composerAccessory}
-            <Input
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder={placeholder}
-              className="h-10 flex-1 rounded-full px-4"
-            />
-            {isSending ? (
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                className="size-10 shrink-0 cursor-pointer rounded-full"
-                aria-label="Stop"
-                onClick={() => void handleStop()}
-              >
-                <Square className="size-3.5" />
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                size="icon"
-                className="size-10 shrink-0 cursor-pointer rounded-full"
-                aria-label="Send"
-                disabled={!message.trim() && attachments.length === 0}
-              >
-                <ArrowUp className="size-4" />
-              </Button>
-            )}
-          </form>
-        </div>
+        {showEmptyState ? null : (
+          <div className="relative z-10 w-full border-t bg-card">
+            {attachments.length > 0 && <div className="flex flex-wrap gap-1.5 px-4 pt-3">{attachmentChips}</div>}
+            {renderComposer(false)}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-function TurnBubble({ turn }: { turn: Turn }) {
+function AgentAvatar() {
+  return (
+    <span
+      className="grid size-7 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground"
+      aria-hidden
+    >
+      <Sparkles className="size-3.5" />
+    </span>
+  )
+}
+
+function UserAvatar({ name }: { name: string }) {
+  return (
+    <span
+      className="grid size-7 shrink-0 place-items-center rounded-full border bg-card text-xs font-semibold text-foreground"
+      aria-hidden
+    >
+      {name.charAt(0).toUpperCase()}
+    </span>
+  )
+}
+
+function TurnBubble({ turn, userName, agentName }: { turn: Turn; userName: string; agentName: string }) {
   if (turn.role === "user") {
+    const files = turn.files ?? []
     return (
-      <div className="flex justify-end">
-        <p className="max-w-[75%] rounded-2xl bg-primary px-3 py-1.5 text-sm whitespace-pre-wrap text-primary-foreground">
-          {turn.text}
-        </p>
+      <div className="flex items-start justify-end gap-2.5">
+        <div className="flex max-w-[75%] min-w-0 flex-col items-end gap-1">
+          <span className="px-1 text-xs font-medium text-muted-foreground">{userName}</span>
+          <div className="rounded-2xl rounded-tr-sm bg-primary px-3.5 py-2 text-sm text-primary-foreground">
+            {files.length > 0 ? (
+              <div className={cn("flex flex-wrap gap-1.5", turn.text && "mb-1.5")}>
+                {files.map((file, index) => (
+                  <span
+                    key={`${file}-${index}`}
+                    className="flex items-center gap-1 rounded-md bg-primary-foreground/15 px-2 py-0.5 text-xs"
+                  >
+                    <Paperclip className="size-3 shrink-0" />
+                    <span className="max-w-48 truncate">{file}</span>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {turn.text ? <p className="whitespace-pre-wrap">{turn.text}</p> : null}
+          </div>
+        </div>
+        <UserAvatar name={userName} />
       </div>
     )
   }
@@ -510,14 +623,18 @@ function TurnBubble({ turn }: { turn: Turn }) {
   }
 
   return (
-    <div className="flex flex-col items-start gap-1">
-      <div className="max-w-[80%] rounded-2xl bg-muted px-3 py-1.5 text-sm text-foreground">
-        <MarkdownText text={turn.text} />
+    <div className="flex items-start justify-start gap-2.5">
+      <AgentAvatar />
+      <div className="flex max-w-[80%] min-w-0 flex-col items-start gap-1">
+        <span className="px-1 text-xs font-medium text-muted-foreground">{agentName}</span>
+        <div className="rounded-2xl rounded-tl-sm bg-muted px-3.5 py-2 text-sm text-foreground">
+          <MarkdownText text={turn.text} />
+        </div>
+        {turn.toolCalls.length > 0 && (
+          <span className="px-1 text-[11px] text-muted-foreground">Used: {turn.toolCalls.join(", ")}</span>
+        )}
+        {turn.interrupted && <span className="px-1 text-[11px] text-muted-foreground">Stopped early.</span>}
       </div>
-      {turn.toolCalls.length > 0 && (
-        <span className="px-1 text-[11px] text-muted-foreground">Used: {turn.toolCalls.join(", ")}</span>
-      )}
-      {turn.interrupted && <span className="px-1 text-[11px] text-muted-foreground">Stopped early.</span>}
     </div>
   )
 }

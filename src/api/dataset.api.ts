@@ -1,14 +1,20 @@
 import { contextHttp } from '@/api/client'
 import { endpoints, versionParams } from '@/api/endpoints'
-import type { Connection, DatasetListing, SelectedDataset, WarehouseDataset } from '@/types/metadataLakehouse'
+import type { Connection, DatasetPage, DatasetPageQuery, SelectedDataset, WarehouseDataset } from '@/types/metadataLakehouse'
 
-export function fetchDatasets(
+export function fetchDatasetPage(
   connectionId: string,
-  limit?: number,
-  version?: string | null
-): Promise<DatasetListing> {
-  return contextHttp.get<DatasetListing>(endpoints.context.datasets(connectionId), {
-    params: { ...(limit ? { limit } : {}), ...versionParams(version) },
+  { page, pageSize, search }: DatasetPageQuery,
+  { fresh = false, version }: { fresh?: boolean; version?: string | null } = {}
+): Promise<DatasetPage> {
+  return contextHttp.get<DatasetPage>(endpoints.context.datasets(connectionId), {
+    params: {
+      page,
+      pageSize,
+      ...(search ? { search } : {}),
+      ...(fresh ? { fresh: 'true' } : {}),
+      ...versionParams(version),
+    },
   })
 }
 

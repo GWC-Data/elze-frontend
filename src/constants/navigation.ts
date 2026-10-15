@@ -5,6 +5,8 @@ import {
   BookOpen,
   BrainCircuit,
   Building2,
+  CircleCheck,
+  FilePen,
   Database,
   KeyRound,
   LayoutDashboard,
@@ -29,6 +31,7 @@ export interface NavItem {
   icon: LucideIcon
   permission?: string
   exact?: boolean
+  children?: NavItem[]
 }
 
 export interface NavGroup {
@@ -36,13 +39,29 @@ export interface NavGroup {
   items: NavItem[]
 }
 
+function allowed(items: NavItem[], can: (permission: string) => boolean): NavItem[] {
+  return items
+    .filter((item) => !item.permission || can(item.permission))
+    .map((item) => (item.children ? { ...item, children: allowed(item.children, can) } : item))
+}
+
 function visible(groups: NavGroup[], can: (permission: string) => boolean): NavGroup[] {
   return groups
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) => !item.permission || can(item.permission)),
-    }))
+    .map((group) => ({ ...group, items: allowed(group.items, can) }))
     .filter((group) => group.items.length > 0)
+}
+
+function lakehouse(paths: AppPaths): NavItem {
+  return {
+    label: 'Metadata Lakehouse',
+    path: paths.metadataLakehouse,
+    icon: Layers,
+    permission: 'context.read',
+    children: [
+      { label: 'Drafts', path: paths.metadataLakehouseDrafts, icon: FilePen, permission: 'context.read' },
+      { label: 'Published', path: paths.metadataLakehousePublished, icon: CircleCheck, permission: 'context.read' },
+    ],
+  }
 }
 
 function platformGroups(paths: AppPaths): NavGroup[] {
@@ -57,7 +76,7 @@ function platformGroups(paths: AppPaths): NavGroup[] {
     {
       title: 'Intelligence',
       items: [
-        { label: 'Metadata Lakehouse', path: paths.metadataLakehouse, icon: Layers, permission: 'context.read' },
+        lakehouse(paths),
         { label: 'Data analyst', path: paths.dataAnalyst(), icon: Bot, permission: 'analyst.use' },
         { label: 'Playbooks', path: paths.playbooks(), icon: BookOpen, permission: 'playbook.read' },
         { label: 'Agents', path: paths.agentLibrary, icon: BrainCircuit, permission: 'agent.read' },
@@ -105,7 +124,7 @@ function workspaceGroups(paths: AppPaths, role?: RoleName): NavGroup[] {
     {
       title: 'Intelligence',
       items: [
-        { label: 'Metadata Lakehouse', path: paths.metadataLakehouse, icon: Layers, permission: 'context.read' },
+        lakehouse(paths),
         { label: 'Data analyst', path: paths.dataAnalyst(), icon: Bot, permission: 'analyst.use' },
         { label: 'Playbooks', path: paths.playbooks(), icon: BookOpen, permission: 'playbook.read' },
         { label: 'Agents', path: paths.agentLibrary, icon: BrainCircuit, permission: 'agent.read' },

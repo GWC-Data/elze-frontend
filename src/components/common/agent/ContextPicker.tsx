@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/workbench/dropdown-menu"
 import { Hint } from "@/components/common/Hint"
+import { PICKER_ITEM_CLASS, PICKER_MENU_CLASS } from "@/lib/pickerStyles"
 
 export type { PublishedContextOption }
 
@@ -106,7 +107,7 @@ export function ContextPicker({
         side="top"
         align="start"
         sideOffset={8}
-        className="max-h-[60vh] w-80 max-w-[90vw] overflow-y-auto"
+        className={cn(PICKER_MENU_CLASS, "max-h-[60vh] w-80 max-w-[90vw] overflow-y-auto")}
       >
         <DropdownMenuRadioGroup
           value={value?.id ?? NONE}
@@ -125,7 +126,7 @@ export function ContextPicker({
             </p>
           ) : (
             <>
-              <DropdownMenuRadioItem value={NONE} closeOnClick>
+              <DropdownMenuRadioItem value={NONE} closeOnClick className={PICKER_ITEM_CLASS}>
                 <span className="text-muted-foreground">No context</span>
               </DropdownMenuRadioItem>
               {groups.length === 0 ? (
@@ -145,7 +146,12 @@ export function ContextPicker({
                         ) : null}
                       </p>
                       {versions.map((item) => (
-                        <DropdownMenuRadioItem key={item.id} value={item.id} closeOnClick>
+                        <DropdownMenuRadioItem
+                          key={item.id}
+                          value={item.id}
+                          closeOnClick
+                          className={PICKER_ITEM_CLASS}
+                        >
                           <span className="flex min-w-0 flex-1 items-center gap-2">
                             <span className="font-mono text-xs font-semibold">{item.label}</span>
                             {item.live ? (

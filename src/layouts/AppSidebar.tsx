@@ -23,6 +23,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarRail,
   SidebarTrigger,
   useSidebar,
@@ -150,6 +153,28 @@ export function AppSidebar({ onNavigate }: AppSidebarProps = {}) {
                               <span>{item.label}</span>
                             </NavLink>
                           </SidebarMenuButton>
+                          {item.children?.length ? (
+                            <SidebarMenuSub>
+                              {item.children.map((child) => {
+                                const childActive = isNavItemActive(child, pathname)
+                                const ChildIcon = child.icon
+                                return (
+                                  <SidebarMenuSubItem key={child.path}>
+                                    <SidebarMenuSubButton asChild isActive={childActive}>
+                                      <NavLink
+                                        to={child.path}
+                                        onClick={handleNavClick}
+                                        aria-current={childActive ? 'page' : undefined}
+                                      >
+                                        <ChildIcon className="size-3.5 shrink-0" aria-hidden />
+                                        <span>{child.label}</span>
+                                      </NavLink>
+                                    </SidebarMenuSubButton>
+                                  </SidebarMenuSubItem>
+                                )
+                              })}
+                            </SidebarMenuSub>
+                          ) : null}
                         </SidebarMenuItem>
                       )
                     })}

@@ -13,6 +13,8 @@ export interface AppPaths {
   readonly data: string
 
   readonly metadataLakehouse: string
+  readonly metadataLakehouseDrafts: string
+  readonly metadataLakehousePublished: string
   metadataLakehouseBuilder(connectionId?: string, versionId?: string): string
   metadataLakehouseConnection(connectionId: string): string
   dataAnalyst(connectionId?: string, sessionId?: string): string
@@ -48,6 +50,8 @@ const PLATFORM: AppPaths = {
   data: '/platform/data',
 
   metadataLakehouse: '/platform/metadata-lakehouse',
+  metadataLakehouseDrafts: '/platform/metadata-lakehouse/drafts',
+  metadataLakehousePublished: '/platform/metadata-lakehouse/published',
   metadataLakehouseBuilder: (id, versionId) =>
     id
       ? `/platform/metadata-lakehouse/builder?connection=${encodeURIComponent(id)}${versionId ? `&version=${encodeURIComponent(versionId)}` : ''
@@ -95,6 +99,8 @@ const WORKSPACE: AppPaths = {
   data: '/data',
 
   metadataLakehouse: '/metadata-lakehouse',
+  metadataLakehouseDrafts: '/metadata-lakehouse/drafts',
+  metadataLakehousePublished: '/metadata-lakehouse/published',
   metadataLakehouseBuilder: (id, versionId) =>
     id
       ? `/metadata-lakehouse/builder?connection=${encodeURIComponent(id)}${versionId ? `&version=${encodeURIComponent(versionId)}` : ''

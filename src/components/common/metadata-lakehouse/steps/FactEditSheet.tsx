@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Check, Loader2 } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,6 +16,7 @@ import { notify } from '@/lib/notify'
 import { useDecideReviewItem, useUpdateReviewItem } from '@/hooks/useMetadataLakehouse'
 import { isAiText, labelFor } from '@/lib/factFields'
 import { FieldValue } from '@/components/common/metadata-lakehouse/steps/FieldDisplay'
+import { AiBadge, Eyebrow } from '@/components/common/metadata-lakehouse/primitives'
 
 export interface EditableFact {
   id: string
@@ -41,7 +41,7 @@ export function FactEditSheet({
       <SheetContent
         showOverlay={false}
         onInteractOutside={(event) => event.preventDefault()}
-        className="w-full overflow-y-auto shadow-2xl sm:max-w-xl"
+        className="w-full gap-0 border-l bg-card shadow-2xl data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
       >
         {fact ? (
           <EditForm
@@ -58,6 +58,10 @@ export function FactEditSheet({
 }
 
 type Draft = Record<string, string>
+
+function objectTypeLabel(objectType: string) {
+  return objectType.replace(/[_-]+/g, ' ').trim()
+}
 
 function EditForm({
   connectionId,
@@ -111,49 +115,46 @@ function EditForm({
 
   return (
     <>
-      <SheetHeader>
-        <SheetTitle className="flex items-center gap-2">
-          <span>Edit generated details</span>
-          <Badge variant="secondary" className="font-mono text-[10px]">
-            {fact.objectType}
-          </Badge>
+      <SheetHeader className="gap-1.5 border-b px-6 pt-6 pb-5 pr-14">
+        <Eyebrow>Edit · {objectTypeLabel(fact.objectType)}</Eyebrow>
+        <SheetTitle className="font-serif text-2xl font-semibold leading-tight tracking-tight break-all">
+          {fact.qualifiedName}
         </SheetTitle>
         <SheetDescription>
-          Edit the text the AI generated. Names and values read from the source stay as they are.
+          Edit the text the AI generated. Names and source values stay as they are.
         </SheetDescription>
       </SheetHeader>
 
-      <div className="space-y-5 px-4">
-        <div className="space-y-1.5">
-          <Label>Name</Label>
-          <div className="rounded-md border bg-muted/50 px-3 py-2">
-            <span className="min-w-0 break-all font-mono text-xs">{fact.qualifiedName}</span>
-          </div>
-          <p className="text-xs text-muted-foreground">Names can’t be edited.</p>
-        </div>
-
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-6">
         {editableKeys.map((key) => {
           const value = draft[key] ?? ''
           const long = key === 'description' || key === 'note' || value.length > 60 || value.includes('\n')
           const id = `fact-${key}`
           return (
-            <div key={key} className="space-y-1.5">
-              <Label htmlFor={id} className="flex items-baseline gap-1.5">
-                {labelFor(key)}
-                <span className="text-[10px] font-normal italic text-muted-foreground">AI generated</span>
-              </Label>
+            <div key={key} className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor={id} className="text-sm font-semibold">
+                  {labelFor(key)}
+                </Label>
+                <AiBadge label="AI generated" />
+              </div>
               {long ? (
                 <Textarea
                   id={id}
-                  rows={key === 'description' ? 6 : 3}
                   value={value}
                   onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
+                  className={
+                    key === 'description'
+                      ? 'max-h-96 min-h-32 bg-background leading-relaxed'
+                      : 'max-h-64 min-h-20 bg-background leading-relaxed'
+                  }
                 />
               ) : (
                 <Input
                   id={id}
                   value={value}
                   onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
+                  className="h-10 bg-background"
                 />
               )}
             </div>
@@ -161,11 +162,12 @@ function EditForm({
         })}
 
         {readOnly.length > 0 ? (
-          <div className="space-y-2 rounded-lg border border-dashed p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Read-only: names, source values and structure
-            </p>
-            <dl className="grid gap-x-4 gap-y-1.5 text-xs sm:grid-cols-[minmax(7rem,auto)_minmax(0,1fr)]">
+          <section className="space-y-3 rounded-xl border bg-muted/30 p-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">From the source</h3>
+              <p className="text-xs text-muted-foreground">Read from the data source, so they can’t be edited here.</p>
+            </div>
+            <dl className="grid gap-x-4 gap-y-2 text-xs sm:grid-cols-[minmax(7rem,auto)_minmax(0,1fr)]">
               {readOnly.map(([key, value]) => (
                 <div key={key} className="contents">
                   <dt className="text-muted-foreground">{labelFor(key)}</dt>
@@ -175,16 +177,15 @@ function EditForm({
                 </div>
               ))}
             </dl>
-          </div>
+          </section>
         ) : null}
       </div>
 
-      <SheetFooter className="flex-row justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={onClose}>
+      <SheetFooter className="mt-0 flex-row items-center justify-end gap-2 border-t bg-card px-6 py-4">
+        <Button variant="ghost" onClick={onClose}>
           Cancel
         </Button>
         <Button
-          size="sm"
           variant={approvable ? 'outline' : 'default'}
           onClick={() => save(false)}
           disabled={changed.length === 0 || busy}
@@ -193,7 +194,7 @@ function EditForm({
           Save changes
         </Button>
         {approvable ? (
-          <Button size="sm" onClick={() => save(true)} disabled={busy}>
+          <Button onClick={() => save(true)} disabled={busy}>
             {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Check className="size-4" aria-hidden />}
             {changed.length > 0 ? 'Save and approve' : 'Approve'}
           </Button>

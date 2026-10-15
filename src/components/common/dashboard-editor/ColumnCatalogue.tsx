@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, Database, Hash, Loader2, Search, Type } from 'lucide-react'
+import { ChevronDown, ChevronRight, Database, Hash, Loader2, Type } from 'lucide-react'
+import { SearchBox } from '@/components/common/SearchBox'
 import type { ColumnCatalogue as Catalogue, SourceColumn } from '@/types/dashboard'
 import { ROLE_STYLE } from '@/constants/editorStyles'
 import { Hint } from '@/components/common/Hint'
@@ -100,15 +101,7 @@ export default function ColumnCatalogue({ catalogue, loading, usedColumns, onPic
       </div>
 
       <div className="border-b border-slate-200 p-2">
-        <div className="relative">
-          <Search size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search"
-            className="h-8 w-full rounded-md border border-slate-300 bg-white pl-7 pr-2 text-[12px] text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
+        <SearchBox fill value={q} onChange={setQ} placeholder="Search columns…" />
       </div>
 
       <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto">

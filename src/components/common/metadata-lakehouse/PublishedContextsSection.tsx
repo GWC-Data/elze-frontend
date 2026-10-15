@@ -1,10 +1,9 @@
 import { useDeferredValue, useState } from 'react'
 import type React from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { GitBranchPlus, History, Trash2, MoreHorizontal, Pencil, Plug, Search, Share2, Table2, User } from 'lucide-react'
+import { GitBranchPlus, History, Trash2, MoreHorizontal, Plug, Share2, Table2, User } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,7 +20,12 @@ import { connectorPresentation } from '@/lib/connectors'
 import { Pagination } from '@/components/common/Pagination'
 import { serverPage } from '@/hooks/usePagination'
 import { formatDateTime, formatExact, formatRelativeTime } from '@/lib/format'
-import type { Connection, PublishedContextGroup, PublishedVersionEntry } from '@/types/metadataLakehouse'
+import type { McpTarget, PublishedContextGroup, PublishedVersionEntry } from '@/types/metadataLakehouse'
+
+export interface ShareTarget {
+  id: string
+  name: string
+}
 import { Hint } from '@/components/common/Hint'
 import { accessAtLeast } from '@/lib/contextAccess'
 
@@ -29,7 +33,6 @@ const PAGE_SIZE = 10
 const PREVIEW = 3
 
 export function PublishedContextsSection({
-  connections,
   builderPath,
   datasetsPath,
   publishedPath,
@@ -37,12 +40,11 @@ export function PublishedContextsSection({
   onShare,
   search,
 }: {
-  connections: Connection[]
   builderPath: (connectionId: string) => string
   datasetsPath: (connectionId: string) => string
   publishedPath: (connectionId: string, versionId: string) => string
-  onMcp: (connection: Connection) => void
-  onShare: (connection: Connection) => void
+  onMcp: (target: McpTarget) => void
+  onShare: (target: ShareTarget) => void
   search: string
 }) {
   const [page, setPage] = useState(1)
@@ -75,8 +77,6 @@ export function PublishedContextsSection({
     )
   }
 
-  const byId = new Map(connections.map((c) => [c.id, c]))
-
   return (
     <div className="space-y-3">
       {data.items.length === 0 ? (
@@ -89,7 +89,6 @@ export function PublishedContextsSection({
             <PublishedContextCard
               key={`${group.connectionId}:${group.name}`}
               group={group}
-              connection={byId.get(group.connectionId) ?? null}
               builderPath={builderPath(group.connectionId)}
               datasetsPath={datasetsPath(group.connectionId)}
               versionPath={(versionId) => publishedPath(group.connectionId, versionId)}
@@ -107,7 +106,6 @@ export function PublishedContextsSection({
 
 function PublishedContextCard({
   group,
-  connection,
   builderPath,
   datasetsPath,
   versionPath,
@@ -115,16 +113,15 @@ function PublishedContextCard({
   onShare,
 }: {
   group: PublishedContextGroup
-  connection: Connection | null
   builderPath: string
   datasetsPath: string
   versionPath: (versionId: string) => string
-  onMcp: (connection: Connection) => void
-  onShare: (connection: Connection) => void
+  onMcp: (target: McpTarget) => void
+  onShare: (target: ShareTarget) => void
 }) {
   const [showAll, setShowAll] = useState(false)
   const [deleting, setDeleting] = useState<PublishedVersionEntry | null>(null)
-  const access = group.access ?? connection?.access ?? null
+  const access = group.access ?? null
   const canEdit = accessAtLeast(access, 'edit')
   const canDelete = accessAtLeast(access, 'full')
   const remove = useDeleteVersion()
@@ -135,7 +132,7 @@ function PublishedContextCard({
     try {
       const state = await create.mutateAsync()
       notify.success(
-        `${state.draft?.label ?? 'A new version'} of ${group.name} opened as a draft.`,
+        `${state.draft?.label ?? 'A new version'} of ${group.name} is open as a draft.`,
         'The published versions are unchanged.'
       )
       navigate(builderPath)
@@ -145,7 +142,6 @@ function PublishedContextCard({
   }
   const presentation = connectorPresentation(group.provider)
   const live = group.versions[0]
-  const editing = connection?.context?.status === 'draft'
   const shown = showAll ? group.versions : group.versions.slice(0, PREVIEW)
   const nextLive = group.versions.find((v) => !v.live) ?? null
 
@@ -194,11 +190,10 @@ function PublishedContextCard({
           </div>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {group.connectionName} · {group.host}
-            {editing && connection?.context ? ` · ${connection.context.label} in progress` : ''}
           </p>
         </div>
 
-        {connection ? (
+        {access ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon-sm" aria-label={`Options for ${group.name}`}>
@@ -206,27 +201,26 @@ function PublishedContextCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onSelect={() => onMcp(connection)}>
+              <DropdownMenuItem
+                onSelect={() =>
+                  onMcp({
+                    id: group.connectionId,
+                    name: group.connectionName,
+                    published: { name: group.name, label: live.label, publishedAt: live.publishedAt },
+                  })
+                }
+              >
                 <Plug aria-hidden />
                 MCP connection details
               </DropdownMenuItem>
               {access?.canShare ? (
-                <DropdownMenuItem onSelect={() => onShare(connection)}>
+                <DropdownMenuItem onSelect={() => onShare({ id: group.connectionId, name: group.connectionName })}>
                   <Share2 aria-hidden />
                   Share…
                 </DropdownMenuItem>
               ) : null}
               <DropdownMenuSeparator />
-              {editing ? (
-                canEdit ? (
-                  <DropdownMenuItem asChild>
-                    <Link to={builderPath}>
-                      <Pencil aria-hidden />
-                      Continue the draft
-                    </Link>
-                  </DropdownMenuItem>
-                ) : null
-              ) : canEdit ? (
+              {canEdit ? (
                 <DropdownMenuItem disabled={create.isPending} onSelect={() => void startNewVersion()}>
                   <GitBranchPlus aria-hidden />
                   {create.isPending ? 'Creating…' : 'Create new version'}
@@ -338,23 +332,5 @@ function PublishedContextCard({
         onConfirm={confirmDelete}
       />
     </article>
-  )
-}
-
-export function PublishedSearch({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  return (
-    <div className="relative w-60">
-      <Search
-        className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-        aria-hidden
-      />
-      <Input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Search contexts…"
-        aria-label="Search published contexts by name or connection"
-        className="h-8 pl-8 text-xs"
-      />
-    </div>
   )
 }

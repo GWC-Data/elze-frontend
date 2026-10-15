@@ -96,7 +96,7 @@ function LakehouseKpis({
         value={lakehouse.loading ? null : lakehouse.contexts.length}
         loading={lakehouse.loading}
         icon={Layers}
-        to={paths.metadataLakehouse}
+        to={paths.metadataLakehousePublished}
         hint="Live for the AI to use"
       />
       <StatCard
@@ -104,7 +104,7 @@ function LakehouseKpis({
         value={lakehouse.loading ? null : lakehouse.factsLive}
         loading={lakehouse.loading}
         icon={Sparkles}
-        to={paths.metadataLakehouse}
+        to={paths.metadataLakehousePublished}
         hint="AI-generated, approved and published"
       />
       <StatCard
@@ -232,7 +232,7 @@ function PlatformOverview() {
               value={lakehouse.loading ? null : lakehouse.contexts.length}
               loading={lakehouse.loading}
               icon={Layers}
-              to={paths.metadataLakehouse}
+              to={paths.metadataLakehousePublished}
               hint="Live for the AI to use"
             />
             <StatCard
@@ -240,7 +240,7 @@ function PlatformOverview() {
               value={lakehouse.loading ? null : lakehouse.factsLive}
               loading={lakehouse.loading}
               icon={Sparkles}
-              to={paths.metadataLakehouse}
+              to={paths.metadataLakehousePublished}
               hint="AI-generated, approved and published"
             />
             <StatCard

@@ -1,7 +1,7 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { Check, Gauge, Info, Loader2, Pencil, Search, SkipForward, X } from 'lucide-react'
+import { Check, Gauge, Info, Loader2, Pencil, SkipForward, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { SearchBox, SearchToolbar } from '@/components/common/SearchBox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { notify } from '@/lib/notify'
@@ -171,35 +171,54 @@ export function ReviewStep() {
       >
         {(data) => (
           <div className="space-y-5">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b pb-2">
-              <FilterChip
-                label="All"
-                count={data.total}
-                active={type === 'all'}
-                onClick={() => chooseType('all')}
-              />
-              {Object.entries(data.counts).map(([key, count]) => (
-                <FilterChip
-                  key={key}
-                  label={key}
-                  count={count}
-                  active={type === key}
-                  onClick={() => chooseType(type === key ? 'all' : key)}
+            <SearchToolbar
+              className="border-b pb-4"
+              search={
+                <SearchBox
+                  value={search}
+                  onChange={(value) => {
+                    setSearch(value)
+                    setPage(1)
+                  }}
+                  placeholder="Search items…"
+                  label="Search review items"
                 />
-              ))}
+              }
+            >
+              <Select value={type} onValueChange={chooseType}>
+                <SelectTrigger size="lg" className="min-w-44" aria-label="Filter by type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All types ({data.total})</SelectItem>
+                  {typeOptions(data.counts, type).map(([key, count]) => (
+                    <SelectItem key={key} value={key}>
+                      {typeLabel(key)} ({count})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
               {readOnly ? null : (
-                <FilterChip
-                  label={`≥ ${HIGH_CONFIDENCE_LABEL} confidence`}
-                  count={data.highConfidence?.pending ?? 0}
-                  active={highOnly}
-                  onClick={() => {
-                    const next = !highOnly
+                <Select
+                  value={highOnly ? 'high' : 'any'}
+                  onValueChange={(value) => {
+                    const next = value === 'high'
                     setHighOnly(next)
                     if (next) setStatus('pending')
                     setPage(1)
                   }}
-                />
+                >
+                  <SelectTrigger size="lg" className="min-w-44" aria-label="Filter by confidence">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Any confidence</SelectItem>
+                    <SelectItem value="high">
+                      ≥ {HIGH_CONFIDENCE_LABEL} confidence ({data.highConfidence?.pending ?? 0})
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               )}
 
               <Select
@@ -209,7 +228,7 @@ export function ReviewStep() {
                   setPage(1)
                 }}
               >
-                <SelectTrigger size="sm" className="ml-auto min-w-36" aria-label="Filter by status">
+                <SelectTrigger size="lg" className="min-w-36" aria-label="Filter by status">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -220,24 +239,7 @@ export function ReviewStep() {
                   ))}
                 </SelectContent>
               </Select>
-
-              <div className="relative w-full max-w-[200px]">
-                <Search
-                  className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden
-                />
-                <Input
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value)
-                    setPage(1)
-                  }}
-                  placeholder="Search items…"
-                  aria-label="Search review items"
-                  className="h-8 pl-8 text-xs"
-                />
-              </div>
-            </div>
+            </SearchToolbar>
 
             {data.items.length === 0 ? (
               <EmptyState
@@ -289,31 +291,14 @@ export function ReviewStep() {
   )
 }
 
-function FilterChip({
-  label,
-  count,
-  active,
-  onClick,
-}: {
-  label: string
-  count: number
-  active: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'border-b-2 px-1 pb-1 text-sm capitalize transition-colors',
-        active
-          ? 'border-primary font-semibold text-primary'
-          : 'border-transparent text-muted-foreground hover:text-foreground'
-      )}
-    >
-      {label} <span className="tabular-nums opacity-70">({count})</span>
-    </button>
-  )
+function typeOptions(counts: Record<string, number>, selected: string): Array<[string, number]> {
+  const entries = Object.entries(counts)
+  return selected === 'all' || selected in counts ? entries : [...entries, [selected, 0]]
+}
+
+function typeLabel(key: string) {
+  const words = key.replace(/[_-]+/g, ' ').trim()
+  return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
 const MEDIUM_CONFIDENCE = 0.7

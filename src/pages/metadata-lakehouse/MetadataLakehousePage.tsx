@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useDeferredValue, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
@@ -14,46 +14,73 @@ import { usePaths } from '@/hooks/usePaths'
 import { Page, PageHeader, Section } from '@/components/common/Page'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { CardGridSkeleton, EmptyState, ErrorState } from '@/components/common/States'
+import { Pagination } from '@/components/common/Pagination'
+import { SearchBox, SearchToolbar } from '@/components/common/SearchBox'
+import { serverPage } from '@/hooks/usePagination'
 import { notify } from '@/lib/notify'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ContextQueryProvider } from '@/context/QueryProvider'
-import { useConnections, useDeleteConnection, useVerifyConnection } from '@/hooks/useMetadataLakehouse'
+import { useDeleteConnection, useDraftConnections, useVerifyConnection } from '@/hooks/useMetadataLakehouse'
 import { VersionBadge } from '@/components/common/metadata-lakehouse/VersionBadge'
 import { McpDetailsDialog } from '@/components/common/metadata-lakehouse/McpDetailsDialog'
 import { ContextShareDialog } from '@/components/common/metadata-lakehouse/ContextShareDialog'
 import { accessAtLeast, CONTEXT_ACCESS_LABELS } from '@/lib/contextAccess'
-import { PublishedContextsSection, PublishedSearch } from '@/components/common/metadata-lakehouse/PublishedContextsSection'
+import {
+  PublishedContextsSection,
+  type ShareTarget,
+} from '@/components/common/metadata-lakehouse/PublishedContextsSection'
 import { connectorPresentation } from '@/lib/connectors'
 import { formatRelativeTime, maskSecretHint } from '@/lib/format'
-import type { Connection } from '@/types/metadataLakehouse'
+import type { DraftConnection, McpTarget } from '@/types/metadataLakehouse'
 
-export default function MetadataLakehousePage() {
+type LakehouseView = 'drafts' | 'published'
+
+const DRAFTS_PAGE_SIZE = 10
+
+export default function MetadataLakehousePage({ view = 'drafts' }: { view?: LakehouseView }) {
   return (
     <ContextQueryProvider>
-      <ConnectionsLanding />
+      {view === 'drafts' ? <DraftsView /> : <PublishedView />}
     </ContextQueryProvider>
   )
 }
 
-function ConnectionsLanding() {
+function ShareDialogFor({ target, onClose }: { target: ShareTarget | null; onClose: () => void }) {
+  return (
+    <ContextShareDialog
+      connectionId={target?.id ?? null}
+      name={target?.name ?? ''}
+      open={target !== null}
+      onOpenChange={(open) => !open && onClose()}
+    />
+  )
+}
+
+function DraftsView() {
   const { can } = useAuth()
   const paths = usePaths()
   const navigate = useNavigate()
   const canCreate = can('context.create')
 
-  const connections = useConnections()
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageFor, setPageFor] = useState(search)
+  if (search !== pageFor) {
+    setPageFor(search)
+    setPage(1)
+  }
+  const query = useDeferredValue(search).trim()
+  const drafts = useDraftConnections({ page, pageSize: DRAFTS_PAGE_SIZE, ...(query ? { search: query } : {}) })
   const verify = useVerifyConnection()
   const remove = useDeleteConnection()
 
-  const [deleting, setDeleting] = useState<Connection | null>(null)
-  const [mcpFor, setMcpFor] = useState<Connection | null>(null)
-  const [shareFor, setShareFor] = useState<Connection | null>(null)
-  const [publishedSearch, setPublishedSearch] = useState('')
+  const [deleting, setDeleting] = useState<DraftConnection | null>(null)
+  const [shareFor, setShareFor] = useState<ShareTarget | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
 
-  const runVerify = async (connection: Connection) => {
+  const runVerify = async (connection: DraftConnection) => {
     setBusyId(connection.id)
     try {
       await verify.mutateAsync(connection.id)
@@ -83,53 +110,66 @@ function ConnectionsLanding() {
     </Button>
   )
 
-  const list = connections.data ?? []
-  const drafts = list.filter((c) => !c.published || c.context?.status === 'draft')
+  const data = drafts.data
+  const items = data?.items ?? []
 
   return (
     <Page>
       <PageHeader
-        title="Metadata Lakehouse"
-        description="The data sources connected to this company, and the context built from them."
+        crumbs={[{ label: 'Metadata Lakehouse' }, { label: 'Drafts' }]}
+        title="Drafts"
+        description="Contexts being built from your data sources. Nothing here is served until it is published."
         actions={canCreate ? newConnection : undefined}
       />
 
-      {connections.isError ? (
-        <Section>
-          <ErrorState
-            error={connections.error}
-            title="Unable to load your connections"
-            onRetry={() => connections.refetch()}
+      <SearchToolbar
+        className="mt-5"
+        search={
+          <SearchBox
+            value={search}
+            onChange={setSearch}
+            placeholder="Search drafts…"
+            label="Search drafts by connection or context name"
           />
+        }
+      />
+
+      {drafts.isError ? (
+        <Section>
+          <ErrorState error={drafts.error} title="Unable to load your drafts" onRetry={() => drafts.refetch()} />
         </Section>
-      ) : connections.isPending ? (
+      ) : !data ? (
         <CardGridSkeleton count={3} />
-      ) : list.length === 0 ? (
+      ) : data.total === 0 && !query ? (
         <Section>
           <EmptyState
-            title="No data source connected yet"
+            title="No drafts in progress"
             body={
               canCreate
-                ? 'Start a new connection to choose a warehouse, pick its datasets, and build a context from them. The credential is validated against the warehouse before anything is saved.'
-                : 'Nobody has connected a warehouse for this company yet. Your role can see connections but not create them.'
+                ? 'Start a new connection to build a context, or open a context in Published and choose Create new version.'
+                : 'Nothing is being built right now. Your role can see contexts but not create them.'
             }
             icon={Database}
-            action={canCreate ? newConnection : undefined}
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                {canCreate ? newConnection : null}
+                <Button asChild variant="outline">
+                  <Link to={paths.metadataLakehousePublished}>Open Published</Link>
+                </Button>
+              </div>
+            }
           />
         </Section>
       ) : (
-        <>
-          <Section
-            title="Drafts"
-            description="Contexts being built. Nothing here is served until it is published."
-          >
-            {drafts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No drafts in progress. Edit a published context below to start its next version.
-              </p>
-            ) : (
-              <div className="grid gap-3 lg:grid-cols-2">
-                {drafts.map((connection) => (
+        <Section>
+          {items.length === 0 ? (
+            <p className="rounded-lg border border-dashed px-3 py-8 text-center text-sm text-muted-foreground">
+              No draft matches “{search}”.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <div className={cn('grid gap-3 lg:grid-cols-2', drafts.isFetching && 'opacity-70')}>
+                {items.map((connection) => (
                   <ConnectionCard
                     key={connection.id}
                     connection={connection}
@@ -138,39 +178,17 @@ function ConnectionsLanding() {
                     datasetsPath={paths.metadataLakehouseConnection(connection.id)}
                     onVerify={() => void runVerify(connection)}
                     onDelete={() => setDeleting(connection)}
-                    onShare={() => setShareFor(connection)}
+                    onShare={() => setShareFor({ id: connection.id, name: connection.name })}
                   />
                 ))}
               </div>
-            )}
-          </Section>
-
-          <Section
-            title="Published"
-            description="Every published context you can open, and its full version history. Open a card or a version to see it as published; the menu has its MCP details, sharing and Create new version."
-            actions={<PublishedSearch value={publishedSearch} onChange={setPublishedSearch} />}
-          >
-            <PublishedContextsSection
-              connections={list}
-              builderPath={(id) => paths.metadataLakehouseBuilder(id)}
-              datasetsPath={(id) => paths.metadataLakehouseConnection(id)}
-              publishedPath={(id, versionId) => paths.metadataLakehouseBuilder(id, versionId)}
-              onMcp={setMcpFor}
-              onShare={setShareFor}
-              search={publishedSearch}
-            />
-          </Section>
-        </>
+              <Pagination {...serverPage(page, DRAFTS_PAGE_SIZE, data.total)} setPage={setPage} noun="drafts" />
+            </div>
+          )}
+        </Section>
       )}
 
-      <McpDetailsDialog connection={mcpFor} onOpenChange={(open) => !open && setMcpFor(null)} />
-
-      <ContextShareDialog
-        connectionId={shareFor?.id ?? null}
-        name={shareFor?.name ?? ''}
-        open={shareFor !== null}
-        onOpenChange={(open) => !open && setShareFor(null)}
-      />
+      <ShareDialogFor target={shareFor} onClose={() => setShareFor(null)} />
 
       <ConfirmDialog
         open={deleting !== null}
@@ -187,6 +205,49 @@ function ConnectionsLanding() {
   )
 }
 
+function PublishedView() {
+  const paths = usePaths()
+  const [search, setSearch] = useState('')
+  const [mcpFor, setMcpFor] = useState<McpTarget | null>(null)
+  const [shareFor, setShareFor] = useState<ShareTarget | null>(null)
+
+  return (
+    <Page>
+      <PageHeader
+        crumbs={[{ label: 'Metadata Lakehouse' }, { label: 'Published' }]}
+        title="Published"
+        description="Every published context you can open, with its full version history. Nothing here changes until a new version is published."
+      />
+
+      <SearchToolbar
+        className="mt-5"
+        search={
+          <SearchBox
+            value={search}
+            onChange={setSearch}
+            placeholder="Search published contexts…"
+            label="Search published contexts by name or connection"
+          />
+        }
+      />
+
+      <Section>
+        <PublishedContextsSection
+          builderPath={(id) => paths.metadataLakehouseBuilder(id)}
+          datasetsPath={(id) => paths.metadataLakehouseConnection(id)}
+          publishedPath={(id, versionId) => paths.metadataLakehouseBuilder(id, versionId)}
+          onMcp={setMcpFor}
+          onShare={setShareFor}
+          search={search}
+        />
+      </Section>
+
+      <McpDetailsDialog connection={mcpFor} onOpenChange={(open) => !open && setMcpFor(null)} />
+      <ShareDialogFor target={shareFor} onClose={() => setShareFor(null)} />
+    </Page>
+  )
+}
+
 function ConnectionCard({
   connection,
   busy,
@@ -196,7 +257,7 @@ function ConnectionCard({
   onDelete,
   onShare,
 }: {
-  connection: Connection
+  connection: DraftConnection
   busy: boolean
   builderPath: string
   datasetsPath: string
@@ -210,6 +271,7 @@ function ConnectionCard({
   const presentation = connectorPresentation(connection.provider)
   const connected = connection.status === 'connected'
   const datasetCount = connection.selectedDatasetCount ?? 0
+  const draft = connection.draft
 
   return (
     <article className="flex flex-col rounded-xl border bg-card">
@@ -253,14 +315,11 @@ function ConnectionCard({
             {access?.owner && !access.isOwner ? ` · owner ${access.owner.name ?? 'unknown'}` : ''}
           </p>
 
-          {connection.context ? (
+          {draft ? (
             <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              <VersionBadge status={connection.context.status} label={connection.context.label} />
+              <VersionBadge status="draft" label={draft.label} />
               <span className="truncate">
-                {connection.context.name}
-                {connection.context.status === 'published' && connection.context.publishedAt
-                  ? ` · published ${formatRelativeTime(connection.context.publishedAt)}`
-                  : ` · edited ${formatRelativeTime(connection.context.updatedAt)}`}
+                {draft.name} · edited {formatRelativeTime(draft.updatedAt)}
               </span>
             </p>
           ) : null}
@@ -291,11 +350,7 @@ function ConnectionCard({
         {canManage ? (
           <Button asChild size="sm">
             <Link to={builderPath}>
-              {connection.context?.status === 'published'
-                ? 'Create new version'
-                : datasetCount > 0
-                  ? 'Continue building'
-                  : 'Build context'}
+              {datasetCount > 0 ? 'Continue building' : 'Build context'}
               <ArrowRight className="size-4" aria-hidden />
             </Link>
           </Button>
@@ -306,12 +361,10 @@ function ConnectionCard({
         </Button>
 
         {canManage ? (
-          <>
-            <Button size="sm" variant="outline" disabled={busy} onClick={onVerify}>
-              <RefreshCw className={cn('size-4', busy && 'animate-spin')} aria-hidden />
-              {busy ? 'Checking…' : 'Verify'}
-            </Button>
-          </>
+          <Button size="sm" variant="outline" disabled={busy} onClick={onVerify}>
+            <RefreshCw className={cn('size-4', busy && 'animate-spin')} aria-hidden />
+            {busy ? 'Checking…' : 'Verify'}
+          </Button>
         ) : null}
         {access?.canShare ? (
           <Button size="sm" variant="outline" onClick={onShare}>

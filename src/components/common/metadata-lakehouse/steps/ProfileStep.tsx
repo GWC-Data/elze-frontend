@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Clock, Columns3, HardDrive, Layers, Loader2, Search, Sparkles, Table2 } from 'lucide-react'
+import { Clock, Columns3, HardDrive, Layers, Loader2, Sparkles, Table2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Input } from '@/components/ui/input'
+import { SearchBox, SearchToolbar } from '@/components/common/SearchBox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { StepFrame } from '@/components/common/metadata-lakehouse/StepFrame'
 import { StopExtractionButton } from '@/components/common/metadata-lakehouse/StopExtraction'
@@ -189,19 +189,14 @@ function TableNav({
           </span>
         </div>
         {tables.length > 5 ? (
-          <div className="relative mt-2.5">
-            <Search
-              className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-              aria-hidden
-            />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Filter tables…"
-              aria-label="Filter tables"
-              className="h-8 pl-8 text-xs"
-            />
-          </div>
+          <SearchBox
+            fill
+            className="mt-2.5"
+            value={search}
+            onChange={setSearch}
+            placeholder="Search tables…"
+            label="Search tables"
+          />
         ) : null}
       </div>
 
@@ -413,27 +408,24 @@ function SchemaTable({ columns }: { columns: ColumnProfile[] }) {
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
+      <SearchToolbar
+        className="border-b border-border px-4 py-3"
+        search={
+          <SearchBox
+            value={search}
+            onChange={(value) => {
+              setSearch(value)
+              paging.setPage(1)
+            }}
+            placeholder="Search columns or types…"
+            label="Search columns"
+          />
+        }
+      >
         <p className="text-xs text-muted-foreground">
           <strong className="font-semibold text-foreground">{formatExact(columns.length)}</strong> columns
         </p>
-        <div className="relative w-full sm:w-56">
-          <Search
-            className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              paging.setPage(1)
-            }}
-            placeholder="Filter columns or types…"
-            aria-label="Filter columns"
-            className="h-8 pl-8 text-xs"
-          />
-        </div>
-      </div>
+      </SearchToolbar>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

@@ -305,7 +305,7 @@ export function PeopleDirectory({
                   onCompanyFilterChange(value === ALL ? null : Number(value))
                 }
               >
-                <SelectTrigger size="sm" className="w-44" aria-label="Filter by company">
+                <SelectTrigger size="lg" className="w-44" aria-label="Filter by company">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -320,7 +320,7 @@ export function PeopleDirectory({
             )}
 
             <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger size="sm" className="w-40" aria-label="Filter by role">
+              <SelectTrigger size="lg" className="w-40" aria-label="Filter by role">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -341,7 +341,7 @@ export function PeopleDirectory({
             </Select>
 
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger size="sm" className="w-40" aria-label="Filter by status">
+              <SelectTrigger size="lg" className="w-40" aria-label="Filter by status">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

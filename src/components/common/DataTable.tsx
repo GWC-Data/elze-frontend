@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { ArrowDown, ArrowUp, ChevronsUpDown, Search, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { SearchBox, SearchToolbar } from '@/components/common/SearchBox'
 import {
   Table,
   TableBody,
@@ -166,37 +166,23 @@ export function DataTable<T>({
   return (
     <div>
       {showToolbar && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
-          {hasSearch && (
-            <div className="relative min-w-0 flex-1 sm:max-w-xs">
-              <Search
-                className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
-              />
-              <Input
+        <SearchToolbar
+          className="border-b border-border px-4 py-3"
+          search={
+            hasSearch ? (
+              <SearchBox
                 value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value)
+                onChange={(next) => {
+                  setQuery(next)
                   if (!server) setClientPage(1)
                 }}
                 placeholder={searchPlaceholder}
-                aria-label={searchPlaceholder}
-                className="pl-8"
               />
-              {query && (
-                <button
-                  type="button"
-                  onClick={clearSearch}
-                  aria-label="Clear search"
-                  className="absolute top-1/2 right-2 grid size-5 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <X className="size-3.5" />
-                </button>
-              )}
-            </div>
-          )}
-          {toolbar && <div className="flex flex-wrap items-center gap-2">{toolbar}</div>}
-        </div>
+            ) : null
+          }
+        >
+          {toolbar}
+        </SearchToolbar>
       )}
 
       {error ? (

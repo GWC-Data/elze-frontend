@@ -281,7 +281,7 @@ function ShareBody({ connectionId }: { connectionId: string }) {
                 onValueChange={(v) => v !== generalAccess && void setGeneral(v as GeneralAccess)}
                 disabled={general.isPending}
               >
-                <SelectTrigger className="h-8 w-full sm:w-64" aria-label="General access">
+                <SelectTrigger className="w-full sm:w-64" aria-label="General access">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -369,7 +369,7 @@ function GroupsSection({
       {canShare ? (
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <Select value={groupId} onValueChange={setGroupId} disabled={shareGroup.isPending}>
-            <SelectTrigger className="h-8 min-w-0 flex-1" aria-label="Choose a group">
+            <SelectTrigger className="min-w-0 flex-1" aria-label="Choose a group">
               <SelectValue
                 placeholder={
                   options.isPending
@@ -478,7 +478,7 @@ function LevelSelect({
 }) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as ContextAccessLevel)} disabled={disabled}>
-      <SelectTrigger id={id} className={compact ? 'h-8 w-[8.5rem]' : 'w-full'} aria-label={label}>
+      <SelectTrigger id={id} className={compact ? 'w-[8.5rem]' : 'w-full'} aria-label={label}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

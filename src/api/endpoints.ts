@@ -101,6 +101,7 @@ export const endpoints = {
   context: {
     connectors: () => '/context/connectors',
     connections: () => '/context/connections',
+    draftConnections: () => '/context/connections/drafts',
     companyPublished: () => '/context/published-versions',
     publishedConnections: () => '/context/published-connections',
     publishedContexts: () => '/context/published-contexts',

@@ -1,9 +1,9 @@
 import { createContext, useContext, useDeferredValue, useRef, useState } from 'react'
 import { useWorkflow } from '@/context/workflowContext'
 import type { MouseEvent, ReactNode } from 'react'
-import { ArrowLeft, AtSign, Check, ChevronRight, Columns3, Filter, Loader2, Pencil, Search, Table2, X } from 'lucide-react'
+import { ArrowLeft, AtSign, Check, ChevronRight, Columns3, Filter, Loader2, Pencil, Table2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { SearchBox, SearchToolbar } from '@/components/common/SearchBox'
 import { cn } from '@/lib/utils'
 import { EmptyState } from '@/components/common/metadata-lakehouse/DataStates'
 import { Pagination } from '@/components/common/Pagination'
@@ -100,7 +100,17 @@ export function TableExplorer({
   return (
     <ReviewActionsContext.Provider value={reviewActions}>
       <section ref={sectionRef} className="scroll-mt-6 space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
+        <SearchToolbar
+          search={
+            <SearchBox
+              className="min-w-64 flex-1 sm:w-auto"
+              value={search}
+              onChange={(next) => refine(() => setSearch(next))}
+              placeholder="Search tables, columns, descriptions…"
+              label="Search tables and what the agent wrote about them"
+            />
+          }
+        >
           <StatBadge label="Tables" value={formatExact(data.tableCount)} />
           <StatBadge label="Columns profiled" value={formatExact(columnCount)} />
           <ReviewFilter
@@ -108,23 +118,7 @@ export function TableExplorer({
             active={reviewOnly}
             onToggle={() => refine(() => setReviewOnly((v) => !v))}
           />
-          <div className="relative min-w-[220px] flex-1">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden
-            />
-            <Input
-              value={search}
-              onChange={(e) => {
-                const next = e.target.value
-                refine(() => setSearch(next))
-              }}
-              placeholder="Search tables, columns, descriptions…"
-              aria-label="Search tables and what the agent wrote about them"
-              className="h-10 pl-9 text-sm"
-            />
-          </div>
-        </div>
+        </SearchToolbar>
 
         {opened ? (
           <TableDetail

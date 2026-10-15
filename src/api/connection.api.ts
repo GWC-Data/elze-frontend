@@ -5,6 +5,8 @@ import type {
   Connector,
   ContextProfile,
   CreatedConnection,
+  DraftConnectionsPage,
+  DraftConnectionsQuery,
   PublishedConnection,
   PublishedContextOption,
 } from '@/types/metadataLakehouse'
@@ -15,6 +17,11 @@ export function listConnectors(): Promise<Connector[]> {
 
 export function listConnections(): Promise<Connection[]> {
   return contextHttp.get<Connection[]>(endpoints.context.connections())
+}
+
+export function listDraftConnections(query: DraftConnectionsQuery): Promise<DraftConnectionsPage> {
+  const params = Object.fromEntries(Object.entries(query).filter(([, v]) => v !== undefined && v !== ''))
+  return contextHttp.get<DraftConnectionsPage>(endpoints.context.draftConnections(), { params })
 }
 
 export function listPublishedConnections(): Promise<PublishedConnection[]> {

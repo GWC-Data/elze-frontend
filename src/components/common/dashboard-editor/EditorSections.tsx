@@ -13,6 +13,15 @@ import { Field, Group, IconButton, Notice, Toggle } from '@/components/common/da
 import { ROLE_STYLE, inputCls } from '@/constants/editorStyles'
 import { AGGS, GRAINS, deriveGroupBy } from '@/lib/cardModel'
 import { Hint } from '@/components/common/Hint'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const ROLE_OPTIONS: Array<{ value: Mapping; label: string }> = [
   { value: 'XTIME', label: 'Category' },
@@ -54,6 +63,62 @@ function BadgeNotice({ children }: { children: string }) {
   return <Notice>{children}</Notice>
 }
 
+type ChoiceOption = { value: string; label: string }
+
+const EMPTY_CHOICE = '__empty__'
+
+const encodeChoice = (value: string) => (value === '' ? EMPTY_CHOICE : value)
+
+const asOptions = (values: ReadonlyArray<string | number>, label: (value: string) => string = (v) => v) =>
+  values.map((v) => ({ value: String(v), label: label(String(v)) }))
+
+function Choice({
+  value,
+  onChange,
+  options = [],
+  groups = [],
+  placeholder,
+  disabled,
+  label,
+}: {
+  value: string
+  onChange: (value: string) => void
+  options?: ChoiceOption[]
+  groups?: Array<{ label: string; options: ChoiceOption[] }>
+  placeholder?: string
+  disabled?: boolean
+  label?: string
+}) {
+  const known = [...options, ...groups.flatMap((g) => g.options)].some((o) => o.value === value)
+  const item = (o: ChoiceOption) => (
+    <SelectItem key={encodeChoice(o.value)} value={encodeChoice(o.value)}>
+      {o.label}
+    </SelectItem>
+  )
+  return (
+    <Select
+      value={known ? encodeChoice(value) : ''}
+      onValueChange={(next) => onChange(next === EMPTY_CHOICE ? '' : next)}
+      disabled={disabled}
+    >
+      <SelectTrigger className="w-full min-w-0" aria-label={label}>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map(item)}
+        {groups
+          .filter((g) => g.options.length > 0)
+          .map((g) => (
+            <SelectGroup key={g.label}>
+              <SelectLabel>{g.label}</SelectLabel>
+              {g.options.map(item)}
+            </SelectGroup>
+          ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
 function ColumnSelect({
   value,
   onChange,
@@ -68,15 +133,13 @@ function ColumnSelect({
   const list = (catalogue?.columns ?? []).filter((c) => !only || c.role === only)
   const known = list.some((c) => c.name === value)
   return (
-    <select className={inputCls} value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">Select column</option>
-      {value && !known && <option value={value}>{value}</option>}
-      {list.map((c) => (
-        <option key={c.name} value={c.name}>
-          {c.name}
-        </option>
-      ))}
-    </select>
+    <Choice
+      value={value}
+      onChange={onChange}
+      placeholder="Select column"
+      label="Column"
+      options={asOptions([...(value && !known ? [value] : []), ...list.map((c) => c.name)])}
+    />
   )
 }
 
@@ -167,29 +230,19 @@ export function FieldsSection(ctx: Ctx) {
                     catalogue={catalogue}
                     only={isValue ? undefined : 'dimension'}
                   />
-                  <select
-                    className={inputCls}
+                  <Choice
                     value={col.mapping ?? 'VALUE'}
-                    onChange={(e) => setColumn(i, 'mapping', e.target.value)}
-                  >
-                    {ROLE_OPTIONS.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => setColumn(i, 'mapping', v)}
+                    options={ROLE_OPTIONS}
+                    label="Role"
+                  />
                   {isValue ? (
-                    <select
-                      className={inputCls}
+                    <Choice
                       value={col.aggregation ?? 'SUM'}
-                      onChange={(e) => setColumn(i, 'aggregation', e.target.value)}
-                    >
-                      {AGGS.map((a) => (
-                        <option key={a} value={a}>
-                          {a}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => setColumn(i, 'aggregation', v)}
+                      options={asOptions(AGGS)}
+                      label="Aggregation"
+                    />
                   ) : (
                     <span className="px-1 text-[12px] text-slate-400">Grouped</span>
                   )}
@@ -251,41 +304,32 @@ export function SortSection({ draft, columns, setCard, setOption, kind }: Ctx) {
     <Group title="Sort & limit">
       <div className="grid grid-cols-2 gap-3">
         <Field label="Sort by">
-          <select
-            className={inputCls}
+          <Choice
             value={order?.column ?? ''}
-            onChange={(e) =>
+            onChange={(v) =>
               setCard({
-                orderBy: e.target.value
-                  ? [{ column: e.target.value, order: order?.order ?? 'DESCENDING' }]
-                  : undefined,
+                orderBy: v ? [{ column: v, order: order?.order ?? 'DESCENDING' }] : undefined,
               })
             }
-          >
-            <option value="">Highest value first</option>
-            {sortable.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+            label="Sort by"
+            options={[{ value: '', label: 'Highest value first' }, ...asOptions(sortable)]}
+          />
         </Field>
         <Field label="Direction">
-          <select
-            className={inputCls}
+          <Choice
             disabled={!order?.column}
             value={order?.order ?? 'DESCENDING'}
-            onChange={(e) =>
+            onChange={(v) =>
               setCard({
-                orderBy: [
-                  { column: order?.column ?? '', order: e.target.value as 'ASCENDING' | 'DESCENDING' },
-                ],
+                orderBy: [{ column: order?.column ?? '', order: v as 'ASCENDING' | 'DESCENDING' }],
               })
             }
-          >
-            <option value="DESCENDING">Descending</option>
-            <option value="ASCENDING">Ascending</option>
-          </select>
+            label="Direction"
+            options={[
+              { value: 'DESCENDING', label: 'Descending' },
+              { value: 'ASCENDING', label: 'Ascending' },
+            ]}
+          />
         </Field>
         <Field label="Show top">
           <input
@@ -303,17 +347,12 @@ export function SortSection({ draft, columns, setCard, setOption, kind }: Ctx) {
         </Field>
         {isFunnel && (
           <Field label="Funnel segments">
-            <select
-              className={inputCls}
-              value={segments}
-              onChange={(e) => setOption('funnelSegments', Number(e.target.value))}
-            >
-              {[3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+            <Choice
+              value={String(segments)}
+              onChange={(v) => setOption('funnelSegments', Number(v))}
+              label="Funnel segments"
+              options={asOptions([3, 4, 5, 6, 7, 8, 9, 10])}
+            />
           </Field>
         )}
       </div>
@@ -337,49 +376,27 @@ export function DateGrainSection({ kind, draft, catalogue, setDateGrain }: Ctx) 
     <Group title={kind === 'kpi' ? 'Comparison period' : 'Time grouping'}>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Date column">
-          <select
-            className={inputCls}
+          <Choice
             value={grain?.column ?? ''}
-            onChange={(e) =>
-              setDateGrain(
-                e.target.value
-                  ? { column: e.target.value, dateTimeElement: grain?.dateTimeElement ?? 'MONTH' }
-                  : undefined
-              )
+            onChange={(v) =>
+              setDateGrain(v ? { column: v, dateTimeElement: grain?.dateTimeElement ?? 'MONTH' } : undefined)
             }
-          >
-            <option value="">None</option>
-            {dateish.length > 0 && (
-              <optgroup label="Date columns">
-                {dateish.map((c) => (
-                  <option key={c.name} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            <optgroup label="Other columns">
-              {others.map((c) => (
-                <option key={c.name} value={c.name}>
-                  {c.name}
-                </option>
-              ))}
-            </optgroup>
-          </select>
+            label="Date column"
+            options={[{ value: '', label: 'None' }]}
+            groups={[
+              { label: 'Date columns', options: asOptions(dateish.map((c) => c.name)) },
+              { label: 'Other columns', options: asOptions(others.map((c) => c.name)) },
+            ]}
+          />
         </Field>
         <Field label="Group into">
-          <select
-            className={inputCls}
+          <Choice
             disabled={!grain?.column}
             value={grain?.dateTimeElement ?? 'MONTH'}
-            onChange={(e) => setDateGrain({ column: grain?.column ?? '', dateTimeElement: e.target.value })}
-          >
-            {GRAINS.map((g) => (
-              <option key={g} value={g}>
-                {g.charAt(0) + g.slice(1).toLowerCase()}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setDateGrain({ column: grain?.column ?? '', dateTimeElement: v })}
+            label="Group into"
+            options={asOptions(GRAINS, (g) => g.charAt(0) + g.slice(1).toLowerCase())}
+          />
         </Field>
       </div>
       {chosen?.isString && !parseFmt && (
@@ -447,25 +464,18 @@ export function ColorSection({ kind, draft, columns, setOption }: Ctx) {
         <div className="space-y-1.5">
           {Object.entries(colorMap).map(([key, color]) => (
             <div key={key} className="grid grid-cols-[1fr_44px_28px] items-center gap-2">
-              <select
-                className={inputCls}
+              <Choice
                 value={key}
-                onChange={(e) => {
+                onChange={(v) => {
                   const next = { ...colorMap }
                   delete next[key]
-                  if (e.target.value) next[e.target.value] = color
+                  if (v) next[v] = color
                   setMap(next)
                 }}
-              >
-                <option value={key}>{key || 'Select series'}</option>
-                {valueCols
-                  .filter((c) => c !== key)
-                  .map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-              </select>
+                placeholder="Select series"
+                label="Series"
+                options={asOptions([...(key ? [key] : []), ...valueCols.filter((c) => c !== key)])}
+              />
               <input
                 type="color"
                 value={/^#[0-9a-fA-F]{6}$/.test(color) ? color : '#898781'}
@@ -539,17 +549,12 @@ export function PropertiesSection({ kind, draft, setCard }: Ctx) {
             />
           </Field>
           <Field label="Width">
-            <select
-              className={inputCls}
-              value={draft.layout?.span ?? (kind === 'kpi' ? 3 : 6)}
-              onChange={(e) => setCard({ layout: { ...(draft.layout ?? {}), span: Number(e.target.value) } })}
-            >
-              {[2, 3, 4, 6, 8, 9, 12].map((n) => (
-                <option key={n} value={n}>
-                  {n === 12 ? 'Full' : `${n}/12`}
-                </option>
-              ))}
-            </select>
+            <Choice
+              value={String(draft.layout?.span ?? (kind === 'kpi' ? 3 : 6))}
+              onChange={(v) => setCard({ layout: { ...(draft.layout ?? {}), span: Number(v) } })}
+              label="Width"
+              options={asOptions([2, 3, 4, 6, 8, 9, 12], (n) => (n === '12' ? 'Full' : `${n}/12`))}
+            />
           </Field>
         </div>
       </Group>
@@ -557,19 +562,12 @@ export function PropertiesSection({ kind, draft, setCard }: Ctx) {
       <Group title="Number format">
         <div className="grid grid-cols-4 gap-3">
           <Field label="Style">
-            <select
-              className={inputCls}
+            <Choice
               value={draft.format?.type ?? ''}
-              onChange={(e) =>
-                setCard({ format: { ...(draft.format ?? {}), type: e.target.value || undefined } })
-              }
-            >
-              {FORMAT_STYLES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setCard({ format: { ...(draft.format ?? {}), type: v || undefined } })}
+              label="Number style"
+              options={FORMAT_STYLES}
+            />
           </Field>
           <Field label="Prefix">
             <input
@@ -586,17 +584,12 @@ export function PropertiesSection({ kind, draft, setCard }: Ctx) {
             />
           </Field>
           <Field label="Decimals">
-            <select
-              className={inputCls}
-              value={draft.format?.digits ?? 0}
-              onChange={(e) => setCard({ format: { ...(draft.format ?? {}), digits: Number(e.target.value) } })}
-            >
-              {[0, 1, 2, 3, 4].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+            <Choice
+              value={String(draft.format?.digits ?? 0)}
+              onChange={(v) => setCard({ format: { ...(draft.format ?? {}), digits: Number(v) } })}
+              label="Decimals"
+              options={asOptions([0, 1, 2, 3, 4])}
+            />
           </Field>
         </div>
         {draft.columns?.some((c) => c.format && Object.keys(c.format).length > 0) && (
