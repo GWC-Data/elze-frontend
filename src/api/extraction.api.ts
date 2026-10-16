@@ -1,5 +1,7 @@
 import {
+  ExtractionConnectionLostError,
   createContextLayerSession,
+  getAdkContextObjects,
   getAdkSession,
   interruptAdkSession,
   triggerContextLayer,
@@ -22,6 +24,19 @@ export interface ExtractionResult {
   interrupted: boolean
   datasetIds?: string[] | null
   extractedAt?: string | null
+  unconfirmed?: boolean
+  savedFacts?: number
+}
+
+const CLOCK_MARGIN_MS = 5000
+
+async function factsSavedSince(contextId: string, versionId: string, sinceMs: number): Promise<number> {
+  const saved = await getAdkContextObjects(contextId, versionId).catch(() => null)
+  if (!saved) return 0
+  return saved.objects.filter((o) => {
+    const written = Date.parse(o.updatedAt || o.createdAt)
+    return Number.isFinite(written) && written >= sinceMs - CLOCK_MARGIN_MS
+  }).length
 }
 
 export interface ExtractionTarget {
@@ -43,9 +58,22 @@ export async function runExtraction(
     datasetIds: target.datasetIds,
   })
   onSession?.(session.sessionId)
+  const startedMs = session.lastUpdateTime ? session.lastUpdateTime * 1000 : Date.now()
 
-  const { success } = await triggerContextLayer(contextId, session.sessionId)
-  if (!success) throw new ExtractionStoppedError()
+  let savedFacts: number | undefined
+  try {
+    const { success } = await triggerContextLayer(contextId, session.sessionId)
+    if (!success) throw new ExtractionStoppedError()
+  } catch (err) {
+    if (!(err instanceof ExtractionConnectionLostError)) throw err
+    savedFacts = await factsSavedSince(contextId, target.versionId, startedMs)
+    if (!savedFacts) {
+      throw new Error(
+        'The connection to the agent service closed before the extraction finished, and no facts were saved. Run the analysis again.',
+        { cause: err }
+      )
+    }
+  }
 
   const report = await fetchExtractionSession(contextId, session.sessionId).catch(() => null)
 
@@ -55,6 +83,7 @@ export async function runExtraction(
     toolCalls: [],
     interrupted: false,
     datasetIds: target.datasetIds,
+    ...(savedFacts ? { unconfirmed: true, savedFacts } : {}),
   }
 }
 

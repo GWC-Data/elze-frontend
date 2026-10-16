@@ -207,35 +207,84 @@ export async function sendDescriptionEditorMessage(
 
 const CONTEXT_LAYER_REQUEST = 'Create a context layer'
 
+export class ExtractionConnectionLostError extends Error {
+  constructor() {
+    super('The connection to the agent service closed before the extraction reported that it finished.')
+    this.name = 'ExtractionConnectionLostError'
+  }
+}
+
+function streamErrorMessage(data: string): string {
+  try {
+    const parsed = JSON.parse(data) as { message?: unknown }
+    if (typeof parsed.message === 'string' && parsed.message.trim()) return parsed.message
+  } catch {
+    if (data.trim()) return data.trim()
+  }
+  return 'The agent service reported an error while running the extraction.'
+}
+
+function streamOutcome(event: string, data: string): { success: boolean } | null {
+  if (event === 'done') return { success: true }
+  if (event === 'interrupted') return { success: false }
+  if (event === 'error') throw new Error(streamErrorMessage(data))
+  return null
+}
+
 async function readStreamOutcome(response: Response): Promise<{ success: boolean }> {
+  if ((response.headers.get('content-type') ?? '').includes('application/json')) {
+    const body = (await response.json()) as { success?: unknown }
+    return { success: body.success === true }
+  }
   if (!response.body) throw new Error('The context extraction returned no stream to read.')
+
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let event = ''
+  let data = ''
+
+  const finish = async (outcome: { success: boolean }) => {
+    await reader.cancel().catch(() => undefined)
+    return outcome
+  }
 
   while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
+    let chunk: ReadableStreamReadResult<Uint8Array>
+    try {
+      chunk = await reader.read()
+    } catch {
+      throw new ExtractionConnectionLostError()
+    }
+    if (chunk.done) break
+    buffer += decoder.decode(chunk.value, { stream: true })
 
     let newlineIndex = buffer.indexOf('\n')
     while (newlineIndex !== -1) {
-      const line = buffer.slice(0, newlineIndex).trim()
+      const line = buffer.slice(0, newlineIndex).replace(/\r$/, '')
       buffer = buffer.slice(newlineIndex + 1)
       newlineIndex = buffer.indexOf('\n')
 
-      if (line === 'event: done') {
-        await reader.cancel().catch(() => undefined)
-        return { success: true }
-      }
-      if (line === 'event: interrupted') {
-        await reader.cancel().catch(() => undefined)
-        return { success: false }
+      if (line === '') {
+        const outcome = streamOutcome(event, data)
+        if (outcome) return finish(outcome)
+        event = ''
+        data = ''
+      } else if (line.startsWith('event:')) {
+        event = line.slice(6).trim()
+      } else if (line.startsWith('data:')) {
+        data += line.slice(5).trim()
       }
     }
   }
 
-  throw new Error('The context extraction stopped before it finished.')
+  const tail = buffer.replace(/\r$/, '')
+  if (tail.startsWith('event:')) event = tail.slice(6).trim()
+  else if (tail.startsWith('data:')) data += tail.slice(5).trim()
+
+  const pending = streamOutcome(event, data)
+  if (pending) return pending
+  throw new ExtractionConnectionLostError()
 }
 
 export async function triggerContextLayer(

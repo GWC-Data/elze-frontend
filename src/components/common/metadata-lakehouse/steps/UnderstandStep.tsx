@@ -5,7 +5,10 @@ import { Button } from '@/components/ui/button'
 import { notify } from '@/lib/notify'
 import { StepFrame } from '@/components/common/metadata-lakehouse/StepFrame'
 import { StopExtractionButton } from '@/components/common/metadata-lakehouse/StopExtraction'
-import { reportExtractionError } from '@/components/common/metadata-lakehouse/reportExtractionError'
+import {
+  reportExtractionError,
+  reportUnconfirmedExtraction,
+} from '@/components/common/metadata-lakehouse/reportExtractionError'
 import {
   BusyOverlay,
   CardSkeleton,
@@ -63,8 +66,8 @@ export function UnderstandStep() {
 
   const run = async () => {
     try {
-      await rerun.mutateAsync({ datasetIds })
-      notify.success('Extraction finished.')
+      const outcome = await rerun.mutateAsync({ datasetIds })
+      if (!reportUnconfirmedExtraction(outcome)) notify.success('Extraction finished.')
     } catch (err) {
       reportExtractionError(err)
     }

@@ -6,7 +6,10 @@ import { SearchBox, SearchToolbar } from '@/components/common/SearchBox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { StepFrame } from '@/components/common/metadata-lakehouse/StepFrame'
 import { StopExtractionButton } from '@/components/common/metadata-lakehouse/StopExtraction'
-import { reportExtractionError } from '@/components/common/metadata-lakehouse/reportExtractionError'
+import {
+  reportExtractionError,
+  reportUnconfirmedExtraction,
+} from '@/components/common/metadata-lakehouse/reportExtractionError'
 import {
   EmptyState,
   EndpointPendingState,
@@ -63,7 +66,7 @@ export function ProfileStep() {
 
   const rerun = async () => {
     try {
-      await runExtraction.mutateAsync({ datasetIds })
+      reportUnconfirmedExtraction(await runExtraction.mutateAsync({ datasetIds }))
       next()
     } catch (err) {
       reportExtractionError(err)
@@ -115,7 +118,7 @@ export function ProfileStep() {
       onNext={async () => {
         if (reusable) return true
         try {
-          await runExtraction.mutateAsync({ datasetIds })
+          reportUnconfirmedExtraction(await runExtraction.mutateAsync({ datasetIds }))
           return true
         } catch (err) {
           reportExtractionError(err)
