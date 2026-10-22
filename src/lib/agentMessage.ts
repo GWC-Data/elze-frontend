@@ -2,6 +2,12 @@ const SCOPE_LINE = /^(?:context_ids=\[|context_id="|row_ids=\[|row_id=")[^\n]*au
 
 const ATTACHMENT = /\[Attached file: (.+?) \([^)\n]*\)\]\n\n/g
 
+const KICKOFF_PROMPT = /^context_id="[^"]*"\. Start the playbook-builder conversation now\b/
+
+export function isKickoffPrompt(raw: string): boolean {
+  return KICKOFF_PROMPT.test(raw.trim())
+}
+
 export interface VisibleMessage {
   text: string
   files: string[]

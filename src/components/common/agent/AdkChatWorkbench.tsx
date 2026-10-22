@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/workbench/button"
 import { Skeleton } from "@/components/ui/workbench/skeleton"
 import { MarkdownText } from "@/components/common/agent/tools/MarkdownText"
 import { useAuth } from "@/context/authContext"
-import { dayGreeting, visibleMessage } from "@/lib/agentMessage"
+import { dayGreeting, isKickoffPrompt, visibleMessage } from "@/lib/agentMessage"
 import { ErrorState, InlineLoading } from "@/components/common/States"
 import type {
   AdkArtifact,
@@ -116,11 +116,13 @@ export function AdkChatWorkbench({
   const history = useAsync(() => (sessionId ? loadSession(sessionId) : Promise.resolve(null)), [sessionId])
   const historyTurns = React.useMemo<Turn[]>(() => {
     if (!history.data) return []
-    return history.data.turns.map((turn) =>
-      turn.role === "user"
-        ? { id: crypto.randomUUID(), role: "user", ...visibleMessage(turn.text) }
-        : { id: crypto.randomUUID(), role: "agent", text: turn.text, toolCalls: [], interrupted: false }
-    ) as Turn[]
+    return history.data.turns
+      .filter((turn) => !(turn.role === "user" && isKickoffPrompt(turn.text)))
+      .map((turn) =>
+        turn.role === "user"
+          ? { id: crypto.randomUUID(), role: "user", ...visibleMessage(turn.text) }
+          : { id: crypto.randomUUID(), role: "agent", text: turn.text, toolCalls: [], interrupted: false }
+      ) as Turn[]
   }, [history.data])
   const [local, setLocal] = React.useState<{ key: string; items: Turn[] } | null>(null)
   const hasLocal = local !== null && local.key === viewKey
