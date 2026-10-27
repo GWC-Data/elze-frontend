@@ -5,7 +5,9 @@ import {
   getAdkSession,
   interruptAdkSession,
   triggerContextLayer,
+  uploadAdkArtifact,
 } from '@/api/adk.api'
+import { errorMessage } from '@/api/client'
 import type { AdkInterruptResult } from '@/types/adk'
 
 const AGENT = 'context_layer_extractor' as const
@@ -44,6 +46,22 @@ export interface ExtractionTarget {
   contextName: string
   contextDescription?: string | null
   datasetIds: string[]
+  files?: File[]
+}
+
+async function uploadFiles(contextId: string, sessionId: string, files: File[]): Promise<string[]> {
+  const ids: string[] = []
+  for (const file of files) {
+    try {
+      const artifact = await uploadAdkArtifact(contextId, AGENT, sessionId, file)
+      ids.push(artifact.id)
+    } catch (err) {
+      throw new Error(`${file.name} could not be uploaded: ${errorMessage(err, 'the upload failed.')}`, {
+        cause: err,
+      })
+    }
+  }
+  return ids
 }
 
 export async function runExtraction(
@@ -59,10 +77,11 @@ export async function runExtraction(
   })
   onSession?.(session.sessionId)
   const startedMs = session.lastUpdateTime ? session.lastUpdateTime * 1000 : Date.now()
+  const artifactIds = await uploadFiles(contextId, session.sessionId, target.files ?? [])
 
   let savedFacts: number | undefined
   try {
-    const { success } = await triggerContextLayer(contextId, session.sessionId)
+    const { success } = await triggerContextLayer(contextId, session.sessionId, { artifactIds })
     if (!success) throw new ExtractionStoppedError()
   } catch (err) {
     if (!(err instanceof ExtractionConnectionLostError)) throw err

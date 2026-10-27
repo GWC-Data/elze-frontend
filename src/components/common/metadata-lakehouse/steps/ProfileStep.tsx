@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Clock, Columns3, HardDrive, Layers, Loader2, Sparkles, Table2 } from 'lucide-react'
+import { Clock, Columns3, HardDrive, Layers, Loader2, Paperclip, Sparkles, Table2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { notify } from '@/lib/notify'
 import { SearchBox, SearchToolbar } from '@/components/common/SearchBox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { StepFrame } from '@/components/common/metadata-lakehouse/StepFrame'
@@ -43,12 +44,34 @@ import { useWorkflow } from '@/context/workflowContext'
 import type { ColumnProfile, ProfileTableRef, SampleRecords } from '@/types/metadataLakehouse'
 import { Hint } from '@/components/common/Hint'
 
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+const ATTACHMENT_TYPES = [
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'text/plain',
+  'text/csv',
+  'text/markdown',
+  'application/json',
+]
+const ATTACHMENT_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.txt', '.csv', '.md', '.json']
+const ATTACHMENT_ACCEPT = [...ATTACHMENT_TYPES, ...ATTACHMENT_EXTENSIONS].join(',')
+
+function attachable(file: File) {
+  const name = file.name.toLowerCase()
+  return ATTACHMENT_TYPES.includes(file.type) || ATTACHMENT_EXTENSIONS.some((extension) => name.endsWith(extension))
+}
+
 export function ProfileStep() {
   const { connectionId, activeTableId, setActiveTableId, goToStep, next, readOnly } = useWorkflow()
   const overview = useProfileOverview(connectionId)
   const connection = useConnection(connectionId)
   const runExtraction = useRunExtraction(connectionId)
   const saved = useExtraction(connectionId, !readOnly)
+  const [files, setFiles] = useState<File[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const datasetIds = useMemo(
     () => (connection.data?.selectedDatasets ?? []).map((d) => d.id),
@@ -64,14 +87,42 @@ export function ProfileStep() {
     return a.length === b.length && a.every((id, i) => id === b[i])
   }, [saved.data, datasetIds])
 
-  const rerun = async () => {
+  const runsOnNext = !reusable || files.length > 0
+
+  const addFiles = (picked: FileList | null) => {
+    if (!picked?.length) return
+    const accepted: File[] = []
+    for (const file of Array.from(picked)) {
+      if (!attachable(file)) {
+        notify.error(`${file.name} can't be attached.`, 'Use PDF, PNG, JPEG, GIF, WebP, TXT, CSV, MD or JSON.')
+      } else if (file.size > MAX_ATTACHMENT_BYTES) {
+        notify.error(`${file.name} is too large.`, 'The limit is 10 MB per file.')
+      } else {
+        accepted.push(file)
+      }
+    }
+    setFiles((current) => [
+      ...current,
+      ...accepted.filter((file) => !current.some((item) => item.name === file.name && item.size === file.size)),
+    ])
+  }
+
+  const analyse = async (): Promise<boolean> => {
     try {
-      reportUnconfirmedExtraction(await runExtraction.mutateAsync({ datasetIds }))
-      next()
+      reportUnconfirmedExtraction(await runExtraction.mutateAsync({ datasetIds, files }))
+      setFiles([])
+      return true
     } catch (err) {
       reportExtractionError(err)
+      return false
     }
   }
+
+  const rerun = async () => {
+    if (await analyse()) next()
+  }
+
+  const attachedNote = files.length > 0 ? ` and ${files.length} attached file${files.length === 1 ? '' : 's'}` : ''
 
   const firstTableId = useMemo(
     () => overview.data?.datasets.flatMap((d) => d.tables)[0]?.id ?? null,
@@ -93,46 +144,89 @@ export function ProfileStep() {
     <StepFrame
       title="Profile tables and schema"
       description="Structure and statistics for the datasets you selected, read from the source by the backend."
-      nextLabel={reusable ? 'Next' : 'Analyse with AI'}
+      nextLabel={runsOnNext ? 'Analyse with AI' : 'Next'}
       nextPending={runExtraction.isPending}
       actions={
-        reusable && !readOnly ? (
-          <Button variant="outline" size="sm" onClick={rerun} disabled={runExtraction.isPending}>
-            {runExtraction.isPending ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden />
-            ) : (
-              <Sparkles className="size-4" aria-hidden />
-            )}
-            Re-run AI analysis
-          </Button>
-        ) : undefined
+        readOnly ? undefined : (
+          <>
+            <Hint label="Attach reference files for the AI analysis">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={runExtraction.isPending}
+              >
+                <Paperclip className="size-4" aria-hidden />
+                Attach files
+              </Button>
+            </Hint>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept={ATTACHMENT_ACCEPT}
+              className="hidden"
+              onChange={(event) => {
+                addFiles(event.target.files)
+                event.target.value = ''
+              }}
+            />
+            {reusable ? (
+              <Button variant="outline" size="sm" onClick={rerun} disabled={runExtraction.isPending}>
+                {runExtraction.isPending ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <Sparkles className="size-4" aria-hidden />
+                )}
+                Re-run AI analysis
+              </Button>
+            ) : null}
+          </>
+        )
       }
       pendingLabel="Analysing…"
       pendingOverlay={{
         title: 'Analysing your data with AI',
-        detail: `Reading ${datasetIds.length} dataset${datasetIds.length === 1 ? '' : 's'} and generating the business glossary, metrics and relationships. This can take a few minutes. Keep this tab open.`,
+        detail: `Reading ${datasetIds.length} dataset${datasetIds.length === 1 ? '' : 's'}${attachedNote} and generating the business glossary, metrics and relationships. This can take a few minutes. Keep this tab open.`,
         action: <StopExtractionButton run={runExtraction} />,
       }}
       refreshing={overview.isFetching && !overview.isPending}
       nextDisabled={datasetIds.length === 0}
       onNext={async () => {
-        if (reusable) return true
-        try {
-          reportUnconfirmedExtraction(await runExtraction.mutateAsync({ datasetIds }))
-          return true
-        } catch (err) {
-          reportExtractionError(err)
-          return false
-        }
+        if (!runsOnNext) return true
+        return analyse()
       }}
       footerNote={
-        reusable && saved.data?.extractedAt
+        !runsOnNext && saved.data?.extractedAt
           ? `AI analysis saved ${formatRelativeTime(saved.data.extractedAt)} · Next opens it without re-running`
           : overview.data?.profiledAt
           ? `Selected ${formatRelativeTime(overview.data.profiledAt)} · table details are read live`
           : undefined
       }
     >
+      {files.length > 0 ? (
+        <div className="mb-4 flex flex-wrap items-center gap-1.5">
+          {files.map((file) => (
+            <span
+              key={`${file.name}-${file.size}-${file.lastModified}`}
+              className="inline-flex items-center gap-1 rounded-md border bg-muted/40 py-0.5 pr-1 pl-2 text-xs text-foreground"
+            >
+              <Paperclip className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="max-w-56 truncate">{file.name}</span>
+              <span className="text-muted-foreground">{formatBytes(file.size)}</span>
+              <button
+                type="button"
+                onClick={() => setFiles((current) => current.filter((item) => item !== file))}
+                disabled={runExtraction.isPending}
+                aria-label={`Remove ${file.name}`}
+                className="grid size-4 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+              >
+                <X className="size-3" aria-hidden />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
       <QueryBoundary
         query={overview}
         step="Profile"

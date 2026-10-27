@@ -316,8 +316,8 @@ export function useRunExtraction(connectionId: string | null) {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [stopping, setStopping] = useState(false)
 
-  const mutation = useMutation<ExtractionResult, unknown, { datasetIds: string[] }>({
-    mutationFn: async ({ datasetIds }) => {
+  const mutation = useMutation<ExtractionResult, unknown, { datasetIds: string[]; files?: File[] }>({
+    mutationFn: async ({ datasetIds, files }) => {
       const state = await versionsApi.fetchVersions(connectionId!)
       const draft = state.draft ?? (await versionsApi.createVersion(connectionId!)).draft
       if (!draft) throw new Error('No draft version to analyse into.')
@@ -330,6 +330,7 @@ export function useRunExtraction(connectionId: string | null) {
           contextName: profile?.name || draft.name,
           contextDescription: profile?.description ?? null,
           datasetIds,
+          files,
         },
         setSessionId
       )
